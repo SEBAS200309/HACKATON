@@ -1,25 +1,26 @@
-# Design Document: Document Digitization
+# Design Document: Document Digitization (MVP Hackathon)
 
 ## Overview
 
-This design describes a web application for digitizing physical documents used in sporting events. The system enables coordinators to scan or upload paper documents, define areas of interest, extract text via OCR (Amazon Textract), and produce clean digital documents by filling Word (.docx) templates with the extracted data. Optionally, extracted data can also be registered in Excel (.xlsx) templates.
+Aplicación web MVP para la digitalización de documentos físicos utilizados en eventos deportivos. El sistema permite escanear/cargar documentos, definir áreas de interés, extraer texto mediante OCR (Amazon Textract), y generar documentos Word (.docx) completados con la información extraída. Opcionalmente registra datos en plantillas Excel (.xlsx).
 
-The application follows a **Next.js 14 App Router** architecture with a serverless backend using **API Routes**, **Amazon S3** for file storage, and **Amazon Textract** for OCR. The frontend uses **React 18** with **Tailwind CSS** in dark mode with a purple primary palette (`#a855f7`).
+Arquitectura simplificada para hackathon: **Usuario → AWS Amplify (Next.js) → S3 + Textract**. Solo 3 servicios AWS.
 
 ### Key Design Decisions
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| Framework | Next.js 14 (App Router) | Full-stack React with serverless API routes, SSR, mobile-first support |
-| OCR Engine | Amazon Textract (DetectDocumentText + full-document strategy) | Handles printed and handwritten text (handwriting only in English), returns per-word bounding boxes and confidence scores. Single API call per document with client-side coordinate filtering |
-| Template Engine | docxtemplater | Mature library supporting `{{placeholder}}` syntax natively for .docx |
-| Excel Handling | ExcelJS | Read/write .xlsx with cell-level control, header extraction, row appending |
-| PDF Conversion | libreoffice-convert (Lambda layer) | Reliable .docx → PDF via LibreOffice headless in AWS Lambda |
-| File Storage | Amazon S3 + presigned URLs (10-min expiry) | Direct browser-to-S3 upload, avoids 6MB Lambda payload limit. Presigned URLs expire after 10 minutes for security |
-| Authentication | NextAuth.js with credentials provider | Session-based auth with configurable inactivity timeout |
-| Database | Amazon DynamoDB | Serverless, pay-per-request, ideal for file metadata and user records |
-| Styling | Tailwind CSS | Utility-first, dark mode native, responsive with mobile-first approach |
-| State Management | Zustand | Lightweight, minimal boilerplate for client-side state |
+| Framework | Next.js 14 (App Router) | Full-stack React con SSR + API Routes desplegados automáticamente como Lambda por Amplify |
+| Deploy | AWS Amplify | Hosting automático con SSR, API Routes como Lambda, CI/CD integrado |
+| OCR Engine | Amazon Textract (DetectDocumentText) | Full-document strategy con BoundingBox filtering. Una sola llamada API por documento |
+| Template Engine | docxtemplater | Librería madura para llenar plantillas .docx con `{{placeholder}}` |
+| Excel | ExcelJS | Lectura/escritura .xlsx, extracción de headers, append de filas |
+| Storage | Amazon S3 (bucket único) | Almacena plantillas, documentos fuente, configuraciones (JSON), y archivos generados |
+| Metadata | JSON files en S3 | Sin DynamoDB. Archivos `index.json` por prefijo para listar recursos |
+| Auth | Variable de entorno (demo) | Password simple en `process.env.DEMO_PASSWORD` para hackathon single-user |
+| Styling | Tailwind CSS (dark mode) | Purple primary (#a855f7), mobile-first, accesibilidad AA |
+| State | Zustand | Ligero, sin boilerplate para estado cliente |
+| PDF | Omitido en MVP | Solo descarga .docx. Usuario puede "Guardar como PDF" desde Word/navegador |
 
 ---
 
@@ -30,125 +31,104 @@ The application follows a **Next.js 14 App Router** architecture with a serverle
 ```mermaid
 graph TB
     subgraph Client["Browser (Next.js Frontend)"]
-        UI[React Components]
-        Canvas[Canvas Editor - Areas of Interest]
+        UI[React Components + Tailwind Dark Mode]
+        Canvas[Canvas Editor - Áreas de Interés]
         State[Zustand Store]
     end
 
-    subgraph NextJS["Next.js Server (Vercel/Lambda)"]
-        API[API Routes]
-        Auth[NextAuth.js]
+    subgraph Amplify["AWS Amplify (Next.js SSR + API Routes as Lambda)"]
+        API[API Routes - 6 endpoints]
         SSR[Server Components]
     end
 
     subgraph AWS["AWS Services"]
-        S3[Amazon S3]
+        S3[Amazon S3 - Bucket Único]
         Textract[Amazon Textract]
-        DynamoDB[DynamoDB]
-        Lambda[Lambda - PDF Conversion]
     end
 
     UI --> API
     Canvas --> State
     State --> API
-    API --> Auth
     API --> S3
     API --> Textract
-    API --> DynamoDB
-    API --> Lambda
     S3 --> Textract
-    Lambda --> S3
 ```
 
 ### Request Flow: Document Digitization Process
 
 ```mermaid
 sequenceDiagram
-    participant U as User
+    participant U as Usuario
     participant FE as Frontend
-    participant API as API Routes
+    participant API as API Routes (Lambda via Amplify)
     participant S3 as Amazon S3
     participant TX as Amazon Textract
-    participant DB as DynamoDB
-    participant PDF as Lambda (PDF)
 
-    U->>FE: Select Word template
-    FE->>API: GET /api/templates/word
-    API->>DB: Query user templates
-    DB-->>API: Template list
+    U->>FE: Seleccionar plantilla Word
+    FE->>API: GET /api/templates
+    API->>S3: Get templates/index.json
+    S3-->>API: Lista de plantillas
     API-->>FE: Templates
 
-    U->>FE: Capture/upload document
-    FE->>API: POST /api/upload/presign
-    API->>S3: Generate presigned URL
-    S3-->>API: Presigned URL
-    API-->>FE: Upload URL
-    FE->>S3: PUT file directly
+    U->>FE: Capturar/cargar documento
+    FE->>API: POST /api/upload
+    API->>S3: PutObject (sources/ prefix)
+    API->>S3: Update sources/index.json
+    API-->>FE: Document URL
 
-    U->>FE: Define areas of interest
-    U->>FE: Initiate OCR
+    U->>FE: Definir áreas de interés
+    U->>FE: Iniciar OCR
     FE->>API: POST /api/ocr/process
-    API->>S3: Get document image
+    API->>S3: GetObject (document image)
     API->>TX: DetectDocumentText (full document)
-    TX-->>API: All blocks with BoundingBox + confidence
-    API->>API: Filter blocks by area coordinates
-    API->>API: Aggregate confidence per area (min of word confidences)
-    API-->>FE: Results per variable
+    TX-->>API: Blocks con BoundingBox + confidence
+    API->>API: Filtrar blocks por coordenadas de áreas
+    API-->>FE: Resultados por variable
 
-    U->>FE: Review & correct text
-    U->>FE: Approve document
+    U->>FE: Revisar y corregir texto
+    U->>FE: Aprobar documento
     FE->>API: POST /api/documents/generate
-    API->>S3: Get template
-    API->>API: Fill template (docxtemplater)
-    API->>S3: Store completed .docx
-    API->>PDF: Convert to PDF
-    PDF->>S3: Store PDF
-    API->>DB: Save document record
-    API-->>FE: Download URLs
+    API->>S3: Get template .docx
+    API->>API: Llenar template (docxtemplater)
+    API->>S3: Store completed .docx (generated/ prefix)
+    API-->>FE: Download URL (presigned)
 ```
 
 ### Deployment Architecture
 
-- **Frontend + API Routes**: Deployed on Vercel (or AWS Amplify) with edge functions
-- **S3 Bucket**: Single bucket with prefix-based organization per user
-- **DynamoDB**: On-demand capacity for metadata storage
-- **Lambda (PDF)**: Separate Lambda function with LibreOffice layer for .docx → PDF conversion
-- **Textract**: Invoked via AWS SDK from API routes
+- **AWS Amplify**: Hospeda Next.js con SSR. Los API Routes se despliegan automáticamente como funciones Lambda.
+- **S3 Bucket**: Un solo bucket con prefijos planos (sin aislamiento por usuario — demo single-user).
+- **Textract**: Invocado directamente desde API Routes via AWS SDK v3.
+- **Sin DynamoDB**: Metadata almacenada como archivos JSON en S3.
+- **Sin Lambda separado**: No hay función Lambda adicional para PDF. Solo .docx download.
 
-### AWS Service Constraints (from official documentation)
+### AWS Service Constraints
 
-| Service | Constraint | Impact on Design |
-|---------|-----------|-----------------|
-| Textract (sync) | Max 10MB per document, 1 page for PDF/TIFF | Source documents must be single-page images (PNG/JPG preferred). PDFs limited to 1 page. |
-| Textract (sync) | Supported formats: JPEG, PNG, PDF, TIFF | Aligns with accepted source document formats |
-| Textract | Handwriting recognition: English only | Handwritten text in Spanish may have reduced accuracy. Printed Spanish characters (ñ, á, é, etc.) are fully supported. |
-| Textract | Min character height: 15px (8pt at 150 DPI) | Documents should be scanned at ≥150 DPI for reliable detection |
-| Textract | Confidence score is per Block (LINE/WORD), not per region | Confidence per Area_de_Interes is calculated as min(confidence) of all WORD blocks within the area boundaries |
-| S3 Presigned URLs | Expiration must be set explicitly | URLs configured with 10-minute expiry. Bucket policy enforces `s3:signatureAge` ≤ 600000ms |
-| S3 | No built-in per-user isolation | Isolation enforced via prefix `users/{userId}/` and IAM policy with `s3:prefix` condition key |
-| Lambda | Max payload 6MB (sync invocation) | Presigned URLs bypass this for file uploads. PDF conversion Lambda receives S3 key references, not file bytes |
-| DynamoDB | Item size limit 400KB | OCR results stored as Map within document item; large result sets may need to reference S3 |
+| Service | Constraint | Impact |
+|---------|-----------|--------|
+| Textract (sync) | Max 10MB por documento, 1 página para PDF/TIFF | Documentos fuente deben ser single-page (PNG/JPG preferido) |
+| Textract (sync) | Formatos: JPEG, PNG, PDF, TIFF | Alineado con formatos aceptados |
+| Textract | Handwriting: solo inglés | Texto manuscrito en español puede tener precisión reducida. Caracteres impresos (ñ, á, é) soportados. |
+| Textract | Min character height: 15px (8pt at 150 DPI) | Escanear a ≥150 DPI para detección confiable |
+| Textract | Confidence por WORD block | Confidence por área = min(confidence) de todos los WORD blocks dentro del área |
+| S3 | Presigned URLs | URLs con expiración por defecto (15 min para upload, 1 hora para download) |
+| Amplify Lambda | Max payload 6MB | Archivos grandes se manejan pasando S3 keys, no bytes directos |
 
 ### OCR Processing Strategy
 
-The system uses a **full-document, single-call** approach rather than per-area cropping:
+El sistema usa un enfoque **full-document, single-call**:
 
-1. The full Documento_Fuente image is sent to Textract `DetectDocumentText` in a single API call
-2. Textract returns all detected blocks (PAGE, LINE, WORD) with BoundingBox coordinates (normalized 0–1)
-3. The API filters WORD blocks whose BoundingBox overlaps with each Area_de_Interes
-4. For each area, all overlapping words are concatenated in reading order (top-to-bottom, left-to-right)
-5. The confidence score per area is computed as `min(confidence)` of all WORD blocks within that area
-6. If no words overlap an area, the result is empty with confidence 0%
+1. La imagen completa del Documento_Fuente se envía a Textract `DetectDocumentText`
+2. Textract retorna todos los blocks (PAGE, LINE, WORD) con BoundingBox normalizado (0–1)
+3. El API filtra WORD blocks cuyo BoundingBox se solapa con cada Area_de_Interes
+4. Para cada área, las palabras se concatenan en orden de lectura (top-to-bottom, left-to-right)
+5. Confidence por área = `min(confidence)` de todos los WORD blocks dentro del área
+6. Si no hay words en un área, resultado vacío con confidence 0%
 
-**Advantages over per-area cropping:**
-- Single Textract API call regardless of number of areas (lower cost and latency)
-- No image manipulation needed server-side (no sharp/jimp dependency for cropping)
-- Avoids potential text truncation at crop boundaries
-- Textract's BoundingBox coordinates are already normalized (0–1), matching the area coordinate system
-
-**Fallback**: If the document exceeds 10MB (Textract sync limit), the system will:
-1. Attempt to compress the image using sharp (reduce quality to 85%, max dimension 4000px)
-2. If still >10MB after compression, reject with error "El documento excede el tamaño máximo para procesamiento OCR. Reduzca la resolución e intente nuevamente"
+**Ventajas sobre cropping por área:**
+- Una sola llamada Textract independiente del número de áreas (menor costo y latencia)
+- No requiere manipulación de imagen server-side
+- Las coordenadas BoundingBox de Textract ya son normalizadas (0–1)
 
 ---
 
@@ -158,8 +138,8 @@ The system uses a **full-document, single-call** approach rather than per-area c
 
 ```mermaid
 graph TD
-    App[Layout / App Shell]
-    App --> Login[LoginPage]
+    App[Layout / App Shell - Dark Mode]
+    App --> Login[LoginPage - Simple password]
     App --> Dashboard[DashboardPage]
     App --> TemplateManager[TemplateManagerPage]
     App --> Digitization[DigitizationPage]
@@ -167,13 +147,11 @@ graph TD
     TemplateManager --> WordTemplateList[WordTemplateList]
     TemplateManager --> XlsxTemplateList[XlsxTemplateList]
     TemplateManager --> TemplateUploader[TemplateUploader]
-    TemplateManager --> TemplatePreview[TemplatePreview]
     
     Digitization --> TemplateSelector[TemplateSelector]
     Digitization --> DocumentCapture[DocumentCapture]
     Digitization --> AreaEditor[AreaEditor]
     Digitization --> OcrResults[OcrResultsPanel]
-    Digitization --> DocumentPreview[DocumentPreview]
     Digitization --> DownloadPanel[DownloadPanel]
     
     DocumentCapture --> CameraCapture[CameraCapture]
@@ -194,20 +172,15 @@ interface TemplateUploaderProps {
   maxSizeMb: number; // 25
 }
 
-interface TemplatePreviewProps {
-  template: TemplateMetadata;
-  onClose: () => void;
-}
-
 // --- Document Capture ---
 interface DocumentCaptureProps {
-  onDocumentReady: (documentUrl: string, documentId: string) => void;
+  onDocumentReady: (documentUrl: string, s3Key: string) => void;
   onRetake: () => void;
 }
 
 interface CameraCaptureProps {
   onCapture: (imageBlob: Blob) => void;
-  onError: (error: CameraError) => void;
+  onError: (error: string) => void;
 }
 
 // --- Area Editor ---
@@ -235,70 +208,42 @@ interface OcrResultsPanelProps {
   onFieldEdit: (variableName: string, newValue: string) => void;
   onApprove: () => void;
 }
-
-// --- Document Preview ---
-interface DocumentPreviewProps {
-  sourceDocumentUrl: string;
-  generatedDocumentUrl: string;
-  highlightedVariable: string | null;
-  areas: AreaOfInterest[];
-  onVariableClick: (variableName: string) => void;
-}
 ```
 
-### API Routes
+### API Routes (6 endpoints totales)
 
 | Method | Route | Description |
 |--------|-------|-------------|
-| POST | `/api/auth/login` | Authenticate user |
-| POST | `/api/auth/logout` | Terminate session |
-| GET | `/api/auth/session` | Get current session |
-| POST | `/api/auth/extend` | Extend session |
-| GET | `/api/templates/word` | List Word templates |
-| POST | `/api/templates/word` | Upload Word template |
-| DELETE | `/api/templates/word/[id]` | Delete Word template |
-| GET | `/api/templates/word/[id]/preview` | Preview template |
-| GET | `/api/templates/xlsx` | List XLSX templates |
-| POST | `/api/templates/xlsx` | Upload XLSX template |
-| DELETE | `/api/templates/xlsx/[id]` | Delete XLSX template |
-| POST | `/api/upload/presign` | Generate presigned upload URL |
-| POST | `/api/documents/source` | Register source document |
-| POST | `/api/ocr/process` | Process OCR on areas |
-| POST | `/api/documents/generate` | Generate completed document |
-| POST | `/api/documents/pdf` | Convert .docx to PDF |
-| GET | `/api/documents/[id]/download` | Download generated document |
-| GET | `/api/configurations` | List segmentation configs |
-| POST | `/api/configurations` | Save segmentation config |
-| PUT | `/api/configurations/[id]` | Update config |
-| DELETE | `/api/configurations/[id]` | Delete config |
-| GET | `/api/files/history` | Get file history (paginated) |
+| POST | `/api/auth/login` | Verificar password contra env var |
+| GET | `/api/templates` | Listar todas las plantillas (Word + XLSX) |
+| POST | `/api/upload` | Subir archivo (template o source) a S3 |
+| DELETE | `/api/templates/[id]` | Eliminar plantilla |
+| POST | `/api/ocr/process` | Procesar OCR en áreas definidas |
+| POST | `/api/documents/generate` | Generar .docx completado (y XLSX si aplica) |
 
 ### Backend Service Layer
 
 ```typescript
 // --- Template Service ---
 interface TemplateService {
-  uploadWordTemplate(file: Buffer, fileName: string, userId: string): Promise<TemplateMetadata>;
-  uploadXlsxTemplate(file: Buffer, fileName: string, userId: string): Promise<TemplateMetadata>;
+  uploadTemplate(file: Buffer, fileName: string, type: 'word' | 'xlsx'): Promise<TemplateMetadata>;
   extractPlaceholders(docxBuffer: Buffer): Promise<string[]>;
   extractXlsxHeaders(xlsxBuffer: Buffer): Promise<string[]>;
   validateDocxStructure(buffer: Buffer): Promise<boolean>;
   validateXlsxStructure(buffer: Buffer): Promise<boolean>;
-  deleteTemplate(id: string, userId: string): Promise<void>;
-  listTemplates(userId: string, type: 'word' | 'xlsx'): Promise<TemplateMetadata[]>;
+  deleteTemplate(id: string): Promise<void>;
+  listTemplates(type?: 'word' | 'xlsx'): Promise<TemplateMetadata[]>;
 }
 
 // --- OCR Service ---
 interface OcrService {
   processDocument(
     documentKey: string,
-    areas: AreaOfInterest[],
-    documentDimensions: { width: number; height: number }
+    areas: AreaOfInterest[]
   ): Promise<OcrResult[]>;
-  detectText(documentKey: string): Promise<TextractBlock[]>;
+  detectText(imageBytes: Buffer): Promise<TextractBlock[]>;
   filterBlocksByArea(blocks: TextractBlock[], area: AreaOfInterest): TextractBlock[];
-  aggregateConfidence(blocks: TextractBlock[]): number;
-  compressImageIfNeeded(imageBuffer: Buffer, maxSizeBytes: number): Promise<Buffer>;
+  calculateAreaConfidence(blocks: TextractBlock[]): number;
 }
 
 interface TextractBlock {
@@ -311,25 +256,25 @@ interface TextractBlock {
 // --- Document Generation Service ---
 interface DocumentGenerationService {
   fillWordTemplate(templateKey: string, variables: Record<string, string>): Promise<Buffer>;
-  fillXlsxTemplate(templateKey: string, variables: Record<string, string>, userId: string): Promise<Buffer>;
-  convertToPdf(docxBuffer: Buffer): Promise<Buffer>;
+  fillXlsxTemplate(templateKey: string, variables: Record<string, string>): Promise<Buffer>;
 }
 
 // --- Configuration Service ---
 interface ConfigurationService {
-  saveConfiguration(config: SegmentationConfig, userId: string): Promise<string>;
-  loadConfiguration(configId: string): Promise<SegmentationConfig>;
-  listConfigurations(userId: string, templateId?: string): Promise<SegmentationConfigMeta[]>;
-  deleteConfiguration(configId: string, userId: string): Promise<void>;
+  saveConfiguration(config: SegmentationConfig): Promise<void>;
+  loadConfiguration(templateId: string, configName: string): Promise<SegmentationConfig>;
+  listConfigurations(templateId?: string): Promise<SegmentationConfigMeta[]>;
+  deleteConfiguration(templateId: string, configName: string): Promise<void>;
 }
 
-// --- Storage Service ---
+// --- Storage Service (S3 wrapper) ---
 interface StorageService {
-  generatePresignedUploadUrl(key: string, contentType: string, maxSizeBytes: number, expiresInSeconds?: number): Promise<string>; // default: 600 (10 min)
-  generatePresignedDownloadUrl(key: string, expiresInSeconds?: number): Promise<string>; // default: 3600 (1 hour)
-  getObject(key: string): Promise<Buffer>;
   putObject(key: string, body: Buffer, contentType: string): Promise<void>;
+  getObject(key: string): Promise<Buffer>;
   deleteObject(key: string): Promise<void>;
+  getPresignedDownloadUrl(key: string, expiresInSeconds?: number): Promise<string>;
+  getJsonIndex(prefix: string): Promise<any[]>;
+  updateJsonIndex(prefix: string, entries: any[]): Promise<void>;
 }
 ```
 
@@ -337,126 +282,82 @@ interface StorageService {
 
 ## Data Models
 
-### DynamoDB Tables
+### S3 Bucket Structure (Flat Prefixes)
 
-#### Users Table
+```
+s3://document-digitization-hackathon/
+├── templates/
+│   ├── index.json                    # Lista de todas las plantillas
+│   ├── word/{templateId}.docx        # Plantillas Word
+│   └── xlsx/{templateId}.xlsx        # Plantillas Excel
+├── sources/
+│   ├── index.json                    # Lista de documentos fuente
+│   └── {documentId}.(png|jpg|pdf)    # Documentos escaneados/cargados
+├── generated/
+│   ├── index.json                    # Lista de documentos generados
+│   ├── {documentId}.docx             # Documentos Word completados
+│   └── {documentId}.xlsx             # Excel completados
+└── configs/
+    ├── index.json                    # Lista de configuraciones
+    └── {templateId}/{configName}.json # Configuraciones de segmentación
+```
 
-| Attribute | Type | Key | Description |
-|-----------|------|-----|-------------|
-| userId | String | PK | Unique user identifier (UUID) |
-| email | String | GSI-PK | User email (unique) |
-| passwordHash | String | — | bcrypt hashed password |
-| failedAttempts | Number | — | Consecutive failed login attempts |
-| lockedUntil | String | — | ISO timestamp for account lock expiry |
-| createdAt | String | — | ISO timestamp |
-| updatedAt | String | — | ISO timestamp |
-
-#### Templates Table
-
-| Attribute | Type | Key | Description |
-|-----------|------|-----|-------------|
-| templateId | String | PK | Unique template identifier (UUID) |
-| userId | String | GSI-PK | Owner user |
-| type | String | GSI-SK | 'word' or 'xlsx' |
-| fileName | String | — | Original file name |
-| s3Key | String | — | S3 object key |
-| fileSize | Number | — | File size in bytes |
-| placeholders | List<String> | — | Extracted placeholder/header names |
-| uploadDate | String | — | ISO timestamp |
-| status | String | — | 'stored' / 'processing' / 'error' |
-
-#### Documents Table
-
-| Attribute | Type | Key | Description |
-|-----------|------|-----|-------------|
-| documentId | String | PK | Unique document identifier (UUID) |
-| userId | String | GSI-PK | Owner user |
-| type | String | — | 'source' / 'generated' |
-| s3Key | String | — | S3 object key |
-| fileName | String | — | File name |
-| scanDate | String | — | ISO timestamp |
-| wordTemplateId | String | — | Associated Word template |
-| xlsxTemplateId | String | — | Associated XLSX template (optional) |
-| ocrResults | Map | — | Variable → extracted text map |
-| confidenceScores | Map | — | Variable → confidence percentage |
-| status | String | — | 'stored' / 'processing' / 'error' |
-| generatedPdfKey | String | — | S3 key for PDF output |
-| generatedDocxKey | String | — | S3 key for completed .docx |
-| createdAt | String | — | ISO timestamp |
-
-#### Configurations Table
-
-| Attribute | Type | Key | Description |
-|-----------|------|-----|-------------|
-| configId | String | PK | Unique configuration identifier |
-| userId | String | GSI-PK | Owner user |
-| templateId | String | GSI-SK | Associated Word template |
-| name | String | — | Configuration display name |
-| areas | List<Map> | — | Array of area definitions |
-| areas[].x | Number | — | X position (percentage 0–1) |
-| areas[].y | Number | — | Y position (percentage 0–1) |
-| areas[].width | Number | — | Width (percentage 0–1) |
-| areas[].height | Number | — | Height (percentage 0–1) |
-| areas[].variableName | String | — | Variable_de_Extraccion name |
-| lastModified | String | — | ISO timestamp |
-| createdAt | String | — | ISO timestamp |
-
-### TypeScript Interfaces
+### JSON Index Files (reemplazan DynamoDB)
 
 ```typescript
+// templates/index.json
+interface TemplateIndex {
+  templates: TemplateMetadata[];
+}
+
 interface TemplateMetadata {
-  templateId: string;
-  userId: string;
+  id: string;           // UUID
   type: 'word' | 'xlsx';
   fileName: string;
   s3Key: string;
   fileSize: number;
-  placeholders: string[];
-  uploadDate: string;
-  status: 'stored' | 'processing' | 'error';
+  placeholders: string[];  // Variables detectadas
+  uploadDate: string;      // ISO timestamp
 }
 
+// configs/index.json
+interface ConfigIndex {
+  configurations: SegmentationConfigMeta[];
+}
+
+interface SegmentationConfigMeta {
+  templateId: string;
+  configName: string;
+  areaCount: number;
+  lastModified: string;
+}
+```
+
+### TypeScript Interfaces (Core Domain)
+
+```typescript
 interface AreaOfInterest {
   id: string;
-  x: number;        // percentage (0–1) relative to document width
-  y: number;        // percentage (0–1) relative to document height
-  width: number;    // percentage (0–1)
-  height: number;   // percentage (0–1)
+  x: number;        // porcentaje (0–1) relativo al ancho del documento
+  y: number;        // porcentaje (0–1) relativo al alto del documento
+  width: number;    // porcentaje (0–1)
+  height: number;   // porcentaje (0–1)
   variableName: string;
-  color: string;    // unique color for visual distinction
+  color: string;    // color único para distinción visual
 }
 
 interface OcrResult {
   variableName: string;
   extractedText: string;
-  confidence: number; // 0–100, aggregated as min(confidence) of all WORD blocks within the area
-  wordCount: number;  // number of detected words in this area
-  boundingBox: { x: number; y: number; width: number; height: number };
+  confidence: number; // 0–100, min(confidence) de todos los WORD blocks en el área
+  wordCount: number;
 }
 
 interface SegmentationConfig {
-  configId: string;
   templateId: string;
-  name: string;
+  configName: string;
   areas: AreaOfInterest[];
   lastModified: string;
-}
-
-interface DocumentRecord {
-  documentId: string;
-  userId: string;
-  type: 'source' | 'generated';
-  s3Key: string;
-  fileName: string;
-  scanDate: string;
-  wordTemplateId: string;
-  xlsxTemplateId?: string;
-  ocrResults?: Record<string, string>;
-  confidenceScores?: Record<string, number>;
-  status: 'stored' | 'processing' | 'error';
-  generatedPdfKey?: string;
-  generatedDocxKey?: string;
-  createdAt: string;
 }
 
 interface Variable {
@@ -465,36 +366,16 @@ interface Variable {
   assigned: boolean;
 }
 
-interface UserSession {
-  userId: string;
-  email: string;
-  expiresAt: string;     // ISO timestamp
-  lastActivity: string;  // ISO timestamp for inactivity tracking
-}
-
-interface FileHistoryEntry {
-  fileId: string;
-  fileName: string;
+interface GeneratedDocument {
+  id: string;
+  templateId: string;
+  sourceDocumentKey: string;
+  generatedDocxKey: string;
+  generatedXlsxKey?: string;
+  variables: Record<string, string>;
+  confidenceScores: Record<string, number>;
   createdAt: string;
-  fileType: 'Plantilla_Word' | 'Plantilla_XLSX' | 'Documento_Fuente' | 'Configuracion_de_Segmentacion' | 'Documento_Generado';
-  status: 'Almacenado' | 'Procesando' | 'Error';
 }
-```
-
-### S3 Bucket Structure
-
-```
-s3://document-digitization-{env}/
-├── users/{userId}/
-│   ├── templates/
-│   │   ├── word/{templateId}/{fileName}.docx
-│   │   └── xlsx/{templateId}/{fileName}.xlsx
-│   ├── sources/{documentId}/{fileName}.(pdf|png|jpg)
-│   ├── generated/{documentId}/
-│   │   ├── completed.docx
-│   │   └── completed.pdf
-│   ├── xlsx-output/{templateId}/{fileName}.xlsx
-│   └── configurations/{configId}/config.json
 ```
 
 ---
@@ -503,183 +384,129 @@ s3://document-digitization-{env}/
 
 *A property is a characteristic or behavior that should hold true across all valid executions of a system—essentially, a formal statement about what the system should do. Properties serve as the bridge between human-readable specifications and machine-verifiable correctness guarantees.*
 
-### Property 1: Credential validation correctness
+### Property 1: File format validation
 
-*For any* email/password pair, the authentication function SHALL return success if and only if the pair matches a stored user record (with correct hash comparison); otherwise it SHALL return failure and increment the failed attempt counter for that account.
-
-**Validates: Requirements 1.1, 1.2**
-
-### Property 2: Session validity window
-
-*For any* authenticated session and any point in time, the session SHALL be valid if and only if the time elapsed since the last user activity is less than 30 minutes; otherwise the session SHALL be expired.
-
-**Validates: Requirements 1.3, 1.4**
-
-### Property 3: Account locking after consecutive failures
-
-*For any* user account with a sequence of login attempts, the account SHALL be locked for 15 minutes if and only if the most recent 5 consecutive attempts for that account are failures. A successful login at any point SHALL reset the failure counter to zero.
-
-**Validates: Requirements 1.7**
-
-### Property 4: File format validation
-
-*For any* file submitted for upload, the system SHALL accept the file if and only if its extension matches the expected format for the target type (`.docx` for Word templates, `.xlsx` for Excel templates, `.pdf`/`.png`/`.jpg` for source documents); all other extensions SHALL be rejected with the appropriate format-specific error message.
+*For any* file submitted for upload, the system SHALL accept the file if and only if its extension matches the expected format for the target type (`.docx` for Word templates, `.xlsx` for Excel templates, `.pdf`/`.png`/`.jpg` for source documents); all other extensions SHALL be rejected with the appropriate error message in Spanish.
 
 **Validates: Requirements 2.2, 3.2, 4.7, 4.13**
 
-### Property 5: File size validation
+### Property 2: File size validation
 
 *For any* file submitted for upload, the system SHALL accept the file if and only if its size is less than or equal to 25MB (26,214,400 bytes); files exceeding this limit SHALL be rejected.
 
 **Validates: Requirements 2.10, 3.9**
 
-### Property 6: Word template placeholder extraction (round-trip)
+### Property 3: Word template placeholder extraction (round-trip)
 
 *For any* valid .docx document containing zero or more strings matching the pattern `{{[a-zA-Z0-9_]+}}`, the placeholder extraction function SHALL return exactly the set of variable names (without braces) found in the document, with no duplicates and no missed occurrences.
 
 **Validates: Requirements 2.7**
 
-### Property 7: XLSX header extraction
+### Property 4: XLSX header extraction
 
 *For any* valid .xlsx file, the header extraction function SHALL return all non-empty cell values from the first row in column order, producing an empty list if and only if all first-row cells are empty.
 
 **Validates: Requirements 3.3, 3.4**
 
-### Property 8: Template list ordering
+### Property 5: Variable name format validation with priority ordering
 
-*For any* set of templates belonging to a user, the list endpoint SHALL return them sorted by upload date in descending order (most recent first), regardless of insertion order.
-
-**Validates: Requirements 2.5, 3.6**
-
-### Property 9: Area of interest minimum size validation
-
-*For any* drawn rectangle, the system SHALL create an Area_de_Interes if and only if both its width and height are at least 10 pixels; rectangles smaller than 10×10 pixels SHALL be rejected.
-
-**Validates: Requirements 5.2**
-
-### Property 10: Variable name format validation with priority ordering
-
-*For any* string submitted as a Variable_de_Extraccion name, the system SHALL validate in this exact order: (1) format—only alphanumeric characters and underscores, (2) length—between 1 and 50 characters, (3) template match—exists in Word placeholders or XLSX headers. The system SHALL report the error for the first failed check and not proceed to subsequent checks.
+*For any* string submitted as a Variable_de_Extraccion name, the system SHALL validate in this exact order: (1) format—only alphanumeric characters and underscores, (2) length—between 1 and 50 characters, (3) template match—exists in Word placeholders or XLSX headers. The system SHALL report the error for the first failed check only.
 
 **Validates: Requirements 5.3, 5.11**
 
-### Property 11: Variable-to-template matching (case-sensitive)
+### Property 6: Variable-to-template matching (case-sensitive)
 
-*For any* variable name and any set of template placeholders/headers, the match function SHALL return true if and only if an exact case-sensitive string comparison finds the variable name in the set; partial matches, case-insensitive matches, or trimmed matches SHALL not count.
+*For any* variable name and any set of template placeholders/headers, the match function SHALL return true if and only if an exact case-sensitive string comparison finds the variable name in the set; partial matches or case-insensitive matches SHALL not count.
 
 **Validates: Requirements 5.4, 10.1**
 
-### Property 12: Variable uniqueness per document
+### Property 7: Variable uniqueness per document
 
 *For any* set of Area_de_Interes definitions within a single digitization process, no two areas SHALL have the same Variable_de_Extraccion name. Attempting to assign a duplicate name SHALL be rejected.
 
 **Validates: Requirements 5.6**
 
-### Property 13: Coordinate percentage conversion
+### Property 8: Coordinate percentage conversion
 
-*For any* Area_de_Interes defined with pixel coordinates (x, y, width, height) on a document of known dimensions (docWidth, docHeight), the stored configuration SHALL represent coordinates as percentages where storedX = x/docWidth, storedY = y/docHeight, storedWidth = width/docWidth, storedHeight = height/docHeight, all in the range [0, 1].
+*For any* Area_de_Interes defined with pixel coordinates (x, y, width, height) on a document of known dimensions (docWidth, docHeight), the stored configuration SHALL represent coordinates as percentages where storedX = x/docWidth, storedY = y/docHeight, storedWidth = width/docWidth, storedHeight = height/docHeight, all values in the range [0, 1].
 
 **Validates: Requirements 6.2**
 
-### Property 14: BoundingBox overlap detection for area filtering
+### Property 9: BoundingBox overlap detection
 
-*For any* source document processed by Textract and any Area_de_Interes with normalized coordinates (x, y, width, height in range [0,1]), the filtering function SHALL include a WORD block if and only if the block's BoundingBox (left, top, width, height) overlaps with the area boundaries. Overlap is defined as: block.left < area.x + area.width AND block.left + block.width > area.x AND block.top < area.y + area.height AND block.top + block.height > area.y.
+*For any* WORD block returned by Textract with BoundingBox (left, top, width, height) and any Area_de_Interes with normalized coordinates, the filtering function SHALL include the block if and only if: block.left < area.x + area.width AND block.left + block.width > area.x AND block.top < area.y + area.height AND block.top + block.height > area.y.
 
 **Validates: Requirements 7.1**
 
-### Property 15: OCR confidence severity classification
+### Property 10: OCR confidence severity classification
 
-*For any* OCR result with a confidence score, the system SHALL classify it as: (a) critical severity (red border) if confidence equals 0% or text is empty, (b) warning severity (distinct low-confidence indicator) if confidence is above 0% but below 80%, (c) normal (no indicator) if confidence is 80% or above.
+*For any* OCR result with a confidence score, the system SHALL classify it as: (a) critical (red border) if confidence equals 0% or text is empty, (b) warning (yellow indicator) if confidence is above 0% but below 80%, (c) normal (no indicator) if confidence is 80% or above.
 
 **Validates: Requirements 7.6, 8.3, 8.9**
 
-### Property 16: Download filename generation
+### Property 11: Download filename generation
 
-*For any* template name and generation date, the download filename SHALL be constructed as `{templateName}_{YYYY-MM-DD}` followed by the appropriate extension (`.pdf` or `.docx`), where the date component uses the ISO format of the generation timestamp.
+*For any* template name and generation date, the download filename SHALL be constructed as `{templateName}_{YYYY-MM-DD}.docx`, where the date uses the ISO format of the generation timestamp.
 
 **Validates: Requirements 9.4, 9.5**
 
-### Property 17: XLSX row appending without overwrite
+### Property 12: XLSX row appending without overwrite
 
 *For any* sequence of document digitizations using the same Plantilla_XLSX, each new set of extracted data SHALL be appended as a new row after the last existing data row. The row count SHALL equal the header row plus the number of completed digitizations, and no previously inserted data SHALL be modified.
 
 **Validates: Requirements 10.2, 10.8**
 
-### Property 18: File history pagination and ordering
+### Property 13: Area minimum size validation
 
-*For any* set of stored files belonging to a user, the file history endpoint SHALL return pages of at most 20 items each, sorted by creation date in descending order. The total items across all pages SHALL equal the total stored file count for that user.
+*For any* drawn rectangle, the system SHALL create an Area_de_Interes if and only if both its width and height are at least 10 pixels; rectangles smaller than 10×10 SHALL be rejected.
 
-**Validates: Requirements 11.6**
+**Validates: Requirements 5.2**
 
 ---
 
 ## Error Handling
 
-### Error Handling Strategy
+### Error Strategy (Simplified for MVP)
 
-The application uses a layered error handling approach:
-
-| Layer | Strategy | Example |
-|-------|----------|---------|
-| **UI** | Display Spanish error messages via toast notifications; preserve user input on failure | "Error al cargar el archivo. Verifique su conexión e intente nuevamente" |
-| **API** | Return structured error responses with HTTP status codes and error codes | `{ error: { code: "FILE_TOO_LARGE", message: "..." } }` |
-| **Service** | Catch and wrap service-specific errors; implement retry logic for transient failures | S3 upload with 1 automatic retry |
-| **External** | Timeout handling (Textract: 60s, PDF: 30s); graceful degradation | Fallback to manual entry if OCR fails |
-
-### Error Response Format
+Simple try/catch con mensajes en español directamente al usuario via toast notifications. Sin retry automático — solo botones de reintentar manuales.
 
 ```typescript
 interface ApiErrorResponse {
   error: {
-    code: string;          // Machine-readable error code
-    message: string;       // Spanish user-facing message
-    field?: string;        // Field that caused the error (for validation)
-    retryable: boolean;    // Whether the operation can be retried
+    code: string;
+    message: string;      // Siempre en español
+    retryable: boolean;
   };
 }
 ```
 
 ### Error Codes
 
-| Code | HTTP Status | Spanish Message |
-|------|-------------|-----------------|
-| `AUTH_INVALID_CREDENTIALS` | 401 | "Credenciales inválidas. Intente nuevamente" |
-| `AUTH_ACCOUNT_LOCKED` | 423 | "Cuenta bloqueada temporalmente por múltiples intentos fallidos. Intente en 15 minutos" |
-| `AUTH_SESSION_EXPIRED` | 401 | "Su sesión ha expirado" |
+| Code | HTTP Status | Mensaje en Español |
+|------|-------------|-------------------|
+| `AUTH_INVALID` | 401 | "Contraseña incorrecta" |
 | `FILE_FORMAT_INVALID` | 400 | "Formato no soportado. Solo se permiten archivos {formats}" |
 | `FILE_TOO_LARGE` | 400 | "El archivo excede el tamaño máximo permitido de 25MB" |
-| `FILE_CORRUPT` | 400 | "El archivo está dañado o no es un documento Word válido" |
-| `UPLOAD_NETWORK_ERROR` | 503 | "Error al cargar el archivo. Verifique su conexión e intente nuevamente" |
-| `OCR_PROCESSING_FAILED` | 502 | "Error en el procesamiento OCR. Verifique la calidad del documento e intente nuevamente" |
-| `OCR_TIMEOUT` | 504 | "Error en el procesamiento OCR. Verifique la calidad del documento e intente nuevamente" |
-| `OCR_DOCUMENT_TOO_LARGE` | 400 | "El documento excede el tamaño máximo para procesamiento OCR. Reduzca la resolución e intente nuevamente" |
-| `PDF_CONVERSION_FAILED` | 502 | "Error al generar el documento PDF. Intente nuevamente" |
-| `XLSX_GENERATION_FAILED` | 502 | "Error al completar la plantilla Excel. Intente nuevamente" |
+| `FILE_CORRUPT` | 400 | "El archivo está dañado o no es un documento válido" |
+| `UPLOAD_FAILED` | 503 | "Error al cargar el archivo. Verifique su conexión e intente nuevamente" |
+| `OCR_FAILED` | 502 | "Error en el procesamiento OCR. Verifique la calidad del documento e intente nuevamente" |
+| `OCR_TIMEOUT` | 504 | "El procesamiento OCR tardó demasiado. Intente nuevamente" |
+| `GENERATION_FAILED` | 502 | "Error al generar el documento. Intente nuevamente" |
+| `XLSX_FAILED` | 502 | "Error al completar la plantilla Excel. Intente nuevamente" |
 | `STORAGE_FAILED` | 503 | "Error al almacenar el archivo. Intente nuevamente" |
 | `CONFIG_SAVE_FAILED` | 503 | "Error al guardar la configuración. Intente nuevamente" |
-| `PREVIEW_GENERATION_FAILED` | 502 | "Error al generar la vista previa del documento. Intente nuevamente" |
-| `VARIABLE_DUPLICATE` | 400 | "La variable '[nombre]' ya está asignada a otra área. Cada variable solo puede usarse una vez" |
-| `VARIABLE_NO_MATCH` | 400 | "El nombre '[nombre]' no coincide con ninguna variable en las plantillas seleccionadas" |
-| `APPROVAL_VALIDATION_FAILED` | 400 | "Existen campos vacíos o inválidos. Revise los campos marcados antes de aprobar" |
+| `VARIABLE_DUPLICATE` | 400 | "La variable '[nombre]' ya está asignada a otra área" |
+| `VARIABLE_NO_MATCH` | 400 | "El nombre '[nombre]' no coincide con ninguna variable en las plantillas" |
+| `NO_PLACEHOLDERS` | 200 | "No se detectaron variables (placeholders) en esta plantilla" |
 | `CAMERA_UNAVAILABLE` | 200 | "No se detectó cámara. Puede cargar un documento escaneado manualmente" |
-| `NO_PLACEHOLDERS_DETECTED` | 200 | "No se detectaron variables (placeholders) en esta plantilla" |
-
-### Retry Strategy
-
-| Operation | Max Retries | Backoff | User Action |
-|-----------|-------------|---------|-------------|
-| S3 Upload | 1 (automatic) | None | Manual retry button after auto-retry fails |
-| S3 Download | 1 (automatic) | None | Manual retry |
-| Textract | 0 (user-initiated) | — | Retry button always visible |
-| PDF Conversion | 0 (user-initiated) | — | Retry button |
-| Config Save | 0 (user-initiated) | — | Retry button + local storage fallback |
+| `EMPTY_FIELDS` | 400 | "Existen campos vacíos o inválidos. Revise los campos marcados antes de aprobar" |
 
 ### State Preservation on Error
 
-- **File selection**: preserved when upload fails (user doesn't need to re-select)
-- **Area definitions**: preserved in memory when config save fails; auto-saved to localStorage periodically
-- **Edited field values**: preserved in Zustand store when preview generation fails
-- **Digitization progress**: stored in session state so user can resume after page reload
+- **File selection**: preservada cuando falla upload (no re-seleccionar)
+- **Area definitions**: preservadas en Zustand store cuando falla guardado de config
+- **Edited field values**: preservados en Zustand cuando falla generación
+- **Auto-save**: áreas guardadas en localStorage como respaldo
 
 ---
 
@@ -687,85 +514,72 @@ interface ApiErrorResponse {
 
 ### Testing Approach
 
-The testing strategy uses a dual approach combining property-based tests for universal correctness guarantees with example-based tests for specific scenarios and integration points.
+Dual approach: property-based tests para correctness universal + unit tests para escenarios específicos. Simplificado para MVP — sin tests de DynamoDB, auth complejo, o PDF.
 
 ### Property-Based Testing
 
-**Library**: [fast-check](https://github.com/dubzzz/fast-check) (TypeScript/JavaScript PBT library)
+**Library**: [fast-check](https://github.com/dubzzz/fast-check)
 
 **Configuration**:
 - Minimum 100 iterations per property test
-- Each property test tagged with: `Feature: document-digitization, Property {N}: {description}`
-- Run via: `vitest --run` (single execution, no watch mode)
+- Tag: `Feature: document-digitization, Property {N}: {description}`
+- Run via: `vitest --run`
 
-**Properties to implement** (18 properties from Correctness Properties section):
+**Properties to implement** (13 properties):
 
 | Property | Test File | Key Generator |
 |----------|-----------|---------------|
-| 1: Credential validation | `auth.property.test.ts` | `fc.record({ email: fc.emailAddress(), password: fc.string() })` |
-| 2: Session validity window | `session.property.test.ts` | `fc.record({ lastActivity: fc.date(), now: fc.date() })` |
-| 3: Account locking | `auth.property.test.ts` | `fc.array(fc.boolean(), { minLength: 1, maxLength: 10 })` (true=success, false=failure) |
-| 4: File format validation | `validation.property.test.ts` | `fc.record({ extension: fc.string(), targetType: fc.constantFrom('word','xlsx','source') })` |
-| 5: File size validation | `validation.property.test.ts` | `fc.nat({ max: 50_000_000 })` |
-| 6: Placeholder extraction | `template.property.test.ts` | Custom .docx content generator with embedded `{{var}}` patterns |
-| 7: XLSX header extraction | `template.property.test.ts` | `fc.array(fc.option(fc.string({ minLength: 1 })))` |
-| 8: Template list ordering | `template.property.test.ts` | `fc.array(fc.record({ uploadDate: fc.date() }))` |
-| 9: Area minimum size | `area-editor.property.test.ts` | `fc.record({ width: fc.nat({ max: 500 }), height: fc.nat({ max: 500 }) })` |
-| 10: Variable name validation | `validation.property.test.ts` | `fc.string()` with various character sets |
-| 11: Variable-to-template match | `validation.property.test.ts` | `fc.record({ name: fc.string(), set: fc.array(fc.string()) })` |
-| 12: Variable uniqueness | `area-editor.property.test.ts` | `fc.array(fc.string({ minLength: 1 }))` for name sets |
-| 13: Coordinate conversion | `configuration.property.test.ts` | `fc.record({ x: fc.nat(), y: fc.nat(), w: fc.nat(), h: fc.nat(), docW: fc.integer({min:1}), docH: fc.integer({min:1}) })` |
-| 14: BoundingBox overlap | `ocr.property.test.ts` | Two bounding boxes with random normalized coords |
-| 15: Confidence classification | `ocr.property.test.ts` | `fc.integer({ min: 0, max: 100 })` |
-| 16: Filename generation | `document.property.test.ts` | `fc.record({ templateName: fc.string(), date: fc.date() })` |
-| 17: XLSX row appending | `xlsx.property.test.ts` | `fc.array(fc.record({ vars: fc.dictionary(fc.string(), fc.string()) }))` |
-| 18: File history pagination | `file-history.property.test.ts` | `fc.array(fc.record({ createdAt: fc.date() }), { maxLength: 100 })` |
+| 1: File format validation | `validation.property.test.ts` | `fc.record({ extension: fc.string(), targetType: fc.constantFrom('word','xlsx','source') })` |
+| 2: File size validation | `validation.property.test.ts` | `fc.nat({ max: 50_000_000 })` |
+| 3: Placeholder extraction | `template.property.test.ts` | Custom .docx content with embedded `{{var}}` patterns |
+| 4: XLSX header extraction | `template.property.test.ts` | `fc.array(fc.option(fc.string({ minLength: 1 })))` |
+| 5: Variable name validation | `validation.property.test.ts` | `fc.string()` with various character sets |
+| 6: Variable-to-template match | `validation.property.test.ts` | `fc.record({ name: fc.string(), set: fc.array(fc.string()) })` |
+| 7: Variable uniqueness | `area-editor.property.test.ts` | `fc.array(fc.string({ minLength: 1 }))` |
+| 8: Coordinate conversion | `configuration.property.test.ts` | `fc.record({ x: fc.nat(), y: fc.nat(), w: fc.nat(), h: fc.nat(), docW: fc.integer({min:1}), docH: fc.integer({min:1}) })` |
+| 9: BoundingBox overlap | `ocr.property.test.ts` | Two bounding boxes with random normalized coords |
+| 10: Confidence classification | `ocr.property.test.ts` | `fc.integer({ min: 0, max: 100 })` |
+| 11: Filename generation | `document.property.test.ts` | `fc.record({ templateName: fc.string(), date: fc.date() })` |
+| 12: XLSX row appending | `xlsx.property.test.ts` | `fc.array(fc.record({ vars: fc.dictionary(fc.string(), fc.string()) }))` |
+| 13: Area minimum size | `area-editor.property.test.ts` | `fc.record({ width: fc.nat({ max: 500 }), height: fc.nat({ max: 500 }) })` |
 
 ### Unit Tests (Example-Based)
 
 | Area | Focus | Framework |
 |------|-------|-----------|
-| Authentication | Login/logout flows, session extension prompt | Vitest |
-| Template management | Upload flow, duplicate name handling, preview rendering | Vitest + React Testing Library |
-| Document capture | Camera fallback, file upload acceptance, retake flow | Vitest + React Testing Library |
-| Area editor | Drawing interaction, area selection, resize/delete | Vitest + React Testing Library |
-| OCR results | Field display, empty results indicator, retry button | Vitest + React Testing Library |
-| Document preview | Side-by-side display, variable click highlighting | Vitest + React Testing Library |
-| Approval flow | Confirm with empty fields blocked, download availability | Vitest |
+| Template management | Upload flow, duplicate name handling | Vitest |
+| Document capture | Camera fallback, file format acceptance | Vitest + React Testing Library |
+| Area editor | Drawing interaction, resize/delete | Vitest + React Testing Library |
+| OCR results | Field display, confidence indicators, empty results | Vitest + React Testing Library |
+| Document generation | docxtemplater fill, XLSX append | Vitest |
 
 ### Integration Tests
 
 | Area | Focus | Framework |
 |------|-------|-----------|
-| S3 Operations | Upload, download, delete with LocalStack | Vitest + aws-sdk-mock |
+| S3 Operations | Upload, download, JSON index CRUD | Vitest + aws-sdk-mock |
 | Textract | Document processing with sample images | Vitest + aws-sdk-mock |
-| DynamoDB | CRUD operations for all tables | Vitest + aws-sdk-mock |
-| PDF Conversion | .docx → PDF with LibreOffice | Vitest (requires LibreOffice) |
 | End-to-End Flow | Full digitization pipeline | Playwright |
 
 ### Test Organization
 
 ```
 tests/
-├── property/            # Property-based tests (fast-check)
-│   ├── auth.property.test.ts
-│   ├── session.property.test.ts
+├── property/               # Property-based tests (fast-check)
 │   ├── validation.property.test.ts
 │   ├── template.property.test.ts
 │   ├── area-editor.property.test.ts
 │   ├── configuration.property.test.ts
 │   ├── ocr.property.test.ts
 │   ├── document.property.test.ts
-│   ├── xlsx.property.test.ts
-│   └── file-history.property.test.ts
-├── unit/                # Example-based unit tests
+│   └── xlsx.property.test.ts
+├── unit/                   # Example-based unit tests
 │   ├── components/
 │   ├── services/
 │   └── utils/
-├── integration/         # Integration tests
+├── integration/            # Integration tests
 │   ├── s3.integration.test.ts
-│   ├── textract.integration.test.ts
-│   └── dynamodb.integration.test.ts
-└── e2e/                 # End-to-end tests (Playwright)
+│   └── textract.integration.test.ts
+└── e2e/                    # End-to-end (Playwright)
     └── digitization-flow.spec.ts
 ```

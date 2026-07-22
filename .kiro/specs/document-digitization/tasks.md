@@ -67,7 +67,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Redirect unauthenticated users to login
     - _Requirements: 1.1, 1.2, 1.5_
 
-  - [ ]* 2.3 Write unit tests for storage service and auth
+  - [ ] 2.3 Write unit tests for storage service and auth
     - Test S3 service methods with mocked AWS SDK (putObject, getObject, deleteObject, presigned URL generation)
     - Test login endpoint with valid and invalid credentials
     - Test middleware redirect behavior

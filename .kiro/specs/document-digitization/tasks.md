@@ -17,8 +17,8 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Added `node_modules/`, `.next/`, `build/`, `coverage/`, OS files, IDE files
     - _Requirements: Security best practice_
 
-- [ ] 1. Set up project structure, dependencies, and core configuration
-  - [ ] 1.1 Initialize Next.js 14 project with App Router, Tailwind CSS, and install all dependencies
+- [x] 1. Set up project structure, dependencies, and core configuration
+  - [x] 1.1 Initialize Next.js 14 project with App Router, Tailwind CSS, and install all dependencies
     - Run `npx create-next-app@14` with App Router and Tailwind CSS enabled
     - Install runtime deps: `zustand`, `docxtemplater`, `pizzip`, `exceljs`, `@aws-sdk/client-s3`, `@aws-sdk/client-textract`, `@aws-sdk/s3-request-presigner`, `uuid`
     - Install dev deps: `vitest`, `@vitejs/plugin-react`, `@testing-library/react`, `@testing-library/jest-dom`, `fast-check`, `jsdom`, `@types/uuid`
@@ -27,7 +27,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Configure `vitest.config.ts` with jsdom environment, path aliases matching tsconfig
     - _Requirements: 1.1, 1.4_
 
-  - [ ] 1.2 Create TypeScript interfaces and domain types
+  - [x] 1.2 Create TypeScript interfaces and domain types
     - Create `src/types/index.ts` with all domain interfaces:
       - `AreaOfInterest` (id, x, y, width, height as 0–1 percentages, variableName, color)
       - `OcrResult` (variableName, extractedText, confidence 0–100, wordCount)
@@ -40,7 +40,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
       - `ApiErrorResponse` (error: { code, message in Spanish, retryable })
     - _Requirements: 2.7, 5.2, 5.3, 6.2, 7.2, 7.6_
 
-  - [ ] 1.3 Create Zustand store for client state management
+  - [x] 1.3 Create Zustand store for client state management
     - Create `src/store/useAppStore.ts` with slices:
       - auth: { isAuthenticated, login, logout }
       - templates: { wordTemplates, xlsxTemplates, loadTemplates }
@@ -49,7 +49,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Implement localStorage auto-save for area definitions as backup (every 30 seconds)
     - _Requirements: 1.4, 6.10, 8.2_
 
-  - [ ] 1.4 Create shared UI components and layout with dark mode
+  - [x] 1.4 Create shared UI components and layout with dark mode
     - Create `src/app/layout.tsx` with dark mode class on html element, Tailwind global styles, Inter font
     - Create reusable components in `src/components/ui/`:
       - `Button.tsx`: primary (purple #a855f7), secondary, danger variants with hover/active states
@@ -61,7 +61,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - _Requirements: 1.1, 1.5_
 
 - [ ] 2. Implement storage service and authentication
-  - [ ] 2.1 Create S3 storage service wrapper
+  - [~] 2.1 Create S3 storage service wrapper
     - Create `src/services/storageService.ts` implementing `StorageService` interface
     - Methods: `putObject`, `getObject`, `deleteObject`, `getPresignedDownloadUrl` (1 hour expiry), `getJsonIndex`, `updateJsonIndex`
     - Use `@aws-sdk/client-s3` with `PutObjectCommand`, `GetObjectCommand`, `DeleteObjectCommand`
@@ -69,7 +69,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - S3 bucket structure: `templates/`, `sources/`, `generated/`, `configs/` prefixes
     - _Requirements: 11.1, 11.2, 11.4, 11.5, 11.7_
 
-  - [ ] 2.2 Implement auth API route and login page
+  - [~] 2.2 Implement auth API route and login page
     - Create `src/app/api/auth/login/route.ts` — POST endpoint comparing password against `process.env.DEMO_PASSWORD`
     - Return success/failure response; store auth state in cookie or zustand
     - Create `src/app/login/page.tsx` with password input, purple primary button
@@ -78,17 +78,17 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Redirect unauthenticated users to login
     - _Requirements: 1.1, 1.2, 1.5_
 
-  - [ ] 2.3 Write unit tests for storage service and auth
+  - [~] 2.3 Write unit tests for storage service and auth
     - Test S3 service methods with mocked AWS SDK (putObject, getObject, deleteObject, presigned URL generation)
     - Test login endpoint with valid and invalid credentials
     - Test middleware redirect behavior
     - _Requirements: 11.7, 11.8, 1.2_
 
-- [ ] 3. Checkpoint - Ensure project builds and base tests pass
+- [~] 3. Checkpoint - Ensure project builds and base tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 4. Implement template management (Word + XLSX)
-  - [ ] 4.1 Create template service with placeholder and header extraction
+  - [~] 4.1 Create template service with placeholder and header extraction
     - Create `src/services/templateService.ts` implementing `TemplateService` interface
     - `extractPlaceholders(docxBuffer)`: parse .docx with PizZip + docxtemplater, find all `{{variable}}` patterns, return unique variable names without braces
     - `extractXlsxHeaders(xlsxBuffer)`: read first row with ExcelJS, return non-empty cell values in column order
@@ -99,7 +99,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - `listTemplates(type?)`: read from templates/index.json
     - _Requirements: 2.1, 2.3, 2.7, 2.8, 3.1, 3.3, 3.4_
 
-  - [ ] 4.2 Create upload API route with validation
+  - [~] 4.2 Create upload API route with validation
     - Create `src/app/api/upload/route.ts` — POST endpoint accepting multipart form data
     - Fields: `file` (binary), `type` ('word' | 'xlsx' | 'source'), `fileName`
     - Validation chain:
@@ -111,7 +111,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Return Spanish error messages per design error codes: `FILE_FORMAT_INVALID`, `FILE_TOO_LARGE`, `FILE_CORRUPT`
     - _Requirements: 2.1, 2.2, 2.3, 2.10, 3.1, 3.2, 3.9, 4.7, 4.13_
 
-  - [ ] 4.3 Create templates list and delete API routes
+  - [~] 4.3 Create templates list and delete API routes
     - Create `src/app/api/templates/route.ts` — GET endpoint reading `templates/index.json` from S3
     - Return all templates with: id, type, fileName, s3Key, fileSize, placeholders, uploadDate
     - Create `src/app/api/templates/[id]/route.ts` — DELETE endpoint
@@ -119,7 +119,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Handle case where template doesn't exist (404)
     - _Requirements: 2.5, 2.6, 3.6, 3.7_
 
-  - [ ] 4.4 Create template management UI page
+  - [~] 4.4 Create template management UI page
     - Create `src/app/templates/page.tsx` with two sections: Word templates, XLSX templates
     - `TemplateUploader` component: drag-drop zone + file input, validates max 25MB client-side, shows upload progress bar, messages in Spanish
     - `WordTemplateList`: displays name, upload date, file size, placeholders count and list; delete button with confirmation
@@ -141,7 +141,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - **Validates: Requirements 3.3, 3.4**
 
 - [ ] 5. Implement document capture and area editor
-  - [ ] 5.1 Create document capture component
+  - [~] 5.1 Create document capture component
     - Create `src/components/digitization/DocumentCapture.tsx` with two modes:
       - `CameraCapture`: access device camera via `navigator.mediaDevices.getUserMedia`, capture photo as blob, display viewfinder
       - `FileUpload`: accept PDF/PNG/JPG via file input and drag-drop, validate extension and size client-side
@@ -151,7 +151,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Allow retake/replace: discard current and return to capture step
     - _Requirements: 4.5, 4.6, 4.7, 4.8, 4.9, 4.11, 4.12, 4.13_
 
-  - [ ] 5.2 Create canvas area editor component
+  - [~] 5.2 Create canvas area editor component
     - Create `src/components/digitization/AreaEditor.tsx` containing:
       - `CanvasOverlay`: HTML5 Canvas overlay on document image for drawing/resizing/moving/deleting rectangles
       - `AreaList`: list of defined areas with variable names, colors, delete/edit actions
@@ -162,7 +162,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Support: draw new, select existing, resize handles, drag to reposition, delete (key or button)
     - _Requirements: 5.1, 5.2, 5.7, 5.8, 6.2_
 
-  - [ ] 5.3 Create variable assignment and validation logic
+  - [~] 5.3 Create variable assignment and validation logic
     - Create `src/utils/variableValidation.ts` with validation functions:
       - `validateVariableFormat(name)`: only alphanumeric + underscore (`/^[a-zA-Z0-9_]+$/`)
       - `validateVariableLength(name)`: between 1 and 50 characters
@@ -189,7 +189,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - **Validates: Requirements 6.2**
 
 - [ ] 6. Implement configuration save/load
-  - [ ] 6.1 Create configuration service
+  - [~] 6.1 Create configuration service
     - Create `src/services/configurationService.ts` implementing `ConfigurationService` interface
     - `saveConfiguration(config)`: store JSON at `configs/{templateId}/{configName}.json`, update `configs/index.json`
     - `loadConfiguration(templateId, configName)`: retrieve and parse saved config from S3
@@ -198,7 +198,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Store coordinates as percentage-based positions with area dimensions and variable names
     - _Requirements: 6.1, 6.2, 6.3, 6.5, 6.6, 6.7, 6.9_
 
-  - [ ] 6.2 Create configuration UI components
+  - [~] 6.2 Create configuration UI components
     - Add save/load buttons to AreaEditor toolbar
     - Save: modal for configuration name input, success message "Configuración guardada exitosamente"
     - Load: dropdown selector showing available configs (name, area count, last modified)
@@ -208,11 +208,11 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Auto-save to localStorage every 30 seconds while editing areas
     - _Requirements: 6.1, 6.3, 6.4, 6.5, 6.6, 6.8, 6.10_
 
-- [ ] 7. Checkpoint - Ensure template management and area editor work end-to-end
+- [~] 7. Checkpoint - Ensure template management and area editor work end-to-end
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 8. Implement OCR processing
-  - [ ] 8.1 Create OCR service with Textract integration
+  - [~] 8.1 Create OCR service with Textract integration
     - Create `src/services/ocrService.ts` implementing `OcrService` interface
     - `detectText(imageBytes)`: call Textract `DetectDocumentText` on full document image, return all blocks
     - `filterBlocksByArea(blocks, area)`: filter WORD blocks using BoundingBox overlap formula:
@@ -221,7 +221,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - `processDocument(documentKey, areas)`: orchestrate full flow — fetch from S3, call Textract once, filter per area, concatenate words in reading order (top-to-bottom, left-to-right)
     - _Requirements: 7.1, 7.2, 7.6, 7.7, 7.8_
 
-  - [ ] 8.2 Create OCR process API route
+  - [~] 8.2 Create OCR process API route
     - Create `src/app/api/ocr/process/route.ts` — POST endpoint
     - Accept body: `{ documentKey: string, areas: AreaOfInterest[] }`
     - Fetch document bytes from S3, call ocrService.processDocument
@@ -230,7 +230,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Error responses in Spanish per design error codes
     - _Requirements: 7.1, 7.2, 7.3, 7.5, 7.9_
 
-  - [ ] 8.3 Create OCR results panel component
+  - [~] 8.3 Create OCR results panel component
     - Create `src/components/digitization/OcrResultsPanel.tsx`
     - Editable text fields per variable showing extracted text
     - Confidence indicators per design:
@@ -250,14 +250,14 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - **Validates: Requirements 7.6, 8.3, 8.9**
 
 - [ ] 9. Implement document generation and download
-  - [ ] 9.1 Create document generation service
+  - [~] 9.1 Create document generation service
     - Create `src/services/documentGenerationService.ts` implementing `DocumentGenerationService` interface
     - `fillWordTemplate(templateKey, variables)`: load .docx from S3, create PizZip instance, use docxtemplater to fill `{{placeholder}}` with variable values, return completed Buffer
     - `fillXlsxTemplate(templateKey, variables)`: load .xlsx from S3 with ExcelJS, find last row with data, append new row mapping variable names to column headers (case-sensitive match), return Buffer
     - Handle missing variables gracefully: leave placeholder empty if variable not provided
     - _Requirements: 9.1, 9.4, 9.5, 10.1, 10.2, 10.8_
 
-  - [ ] 9.2 Create document generate API route
+  - [~] 9.2 Create document generate API route
     - Create `src/app/api/documents/generate/route.ts` — POST endpoint
     - Accept body: `{ templateId: string, xlsxTemplateId?: string, variables: Record<string, string>, sourceDocumentKey: string }`
     - Generate completed .docx via documentGenerationService
@@ -268,7 +268,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Return download URLs and generated document metadata
     - _Requirements: 9.4, 9.5, 9.6, 9.8, 10.2, 10.3, 10.4_
 
-  - [ ] 9.3 Create download panel component
+  - [~] 9.3 Create download panel component
     - Create `src/components/digitization/DownloadPanel.tsx`
     - Download .docx button: enabled immediately after generation completes
     - Download .xlsx button: shown only if XLSX template was selected, enabled after generation
@@ -284,7 +284,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - **Validates: Requirements 10.2, 10.8**
 
 - [ ] 10. Implement main digitization flow and dashboard
-  - [ ] 10.1 Create digitization page with step wizard
+  - [~] 10.1 Create digitization page with step wizard
     - Create `src/app/digitize/page.tsx` with step-by-step flow:
       1. Select Word template (required) + optional XLSX template
       2. Capture/upload source document
@@ -298,7 +298,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Enable Word template selection before XLSX (XLSX option appears after Word selected)
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.10, 5.10, 8.6_
 
-  - [ ] 10.2 Create dashboard page
+  - [~] 10.2 Create dashboard page
     - Create `src/app/dashboard/page.tsx` as landing page after login
     - Quick action buttons: "Nueva Digitalización", "Gestionar Plantillas"
     - Recent activity summary: count of documents processed (from generated/index.json)
@@ -311,7 +311,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Verify correct wiring between components and API routes
     - _Requirements: 4.1, 7.1, 9.1, 10.2_
 
-- [ ] 11. Final checkpoint - Full integration verification
+- [~] 11. Final checkpoint - Full integration verification
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

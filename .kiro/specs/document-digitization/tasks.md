@@ -84,11 +84,11 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Test middleware redirect behavior
     - _Requirements: 11.7, 11.8, 1.2_
 
-- [~] 3. Checkpoint - Ensure project builds and base tests pass
+- [x] 3. Checkpoint - Ensure project builds and base tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 4. Implement template management (Word + XLSX)
-  - [~] 4.1 Create template service with placeholder and header extraction
+- [x] 4. Implement template management (Word + XLSX)
+  - [x] 4.1 Create template service with placeholder and header extraction
     - Create `src/services/templateService.ts` implementing `TemplateService` interface
     - `extractPlaceholders(docxBuffer)`: parse .docx with PizZip + docxtemplater, find all `{{variable}}` patterns, return unique variable names without braces
     - `extractXlsxHeaders(xlsxBuffer)`: read first row with ExcelJS, return non-empty cell values in column order
@@ -99,7 +99,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - `listTemplates(type?)`: read from templates/index.json
     - _Requirements: 2.1, 2.3, 2.7, 2.8, 3.1, 3.3, 3.4_
 
-  - [~] 4.2 Create upload API route with validation
+  - [x] 4.2 Create upload API route with validation
     - Create `src/app/api/upload/route.ts` — POST endpoint accepting multipart form data
     - Fields: `file` (binary), `type` ('word' | 'xlsx' | 'source'), `fileName`
     - Validation chain:
@@ -111,7 +111,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Return Spanish error messages per design error codes: `FILE_FORMAT_INVALID`, `FILE_TOO_LARGE`, `FILE_CORRUPT`
     - _Requirements: 2.1, 2.2, 2.3, 2.10, 3.1, 3.2, 3.9, 4.7, 4.13_
 
-  - [~] 4.3 Create templates list and delete API routes
+  - [x] 4.3 Create templates list and delete API routes
     - Create `src/app/api/templates/route.ts` — GET endpoint reading `templates/index.json` from S3
     - Return all templates with: id, type, fileName, s3Key, fileSize, placeholders, uploadDate
     - Create `src/app/api/templates/[id]/route.ts` — DELETE endpoint
@@ -119,7 +119,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Handle case where template doesn't exist (404)
     - _Requirements: 2.5, 2.6, 3.6, 3.7_
 
-  - [~] 4.4 Create template management UI page
+  - [x] 4.4 Create template management UI page
     - Create `src/app/templates/page.tsx` with two sections: Word templates, XLSX templates
     - `TemplateUploader` component: drag-drop zone + file input, validates max 25MB client-side, shows upload progress bar, messages in Spanish
     - `WordTemplateList`: displays name, upload date, file size, placeholders count and list; delete button with confirmation

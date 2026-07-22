@@ -6,6 +6,17 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
 
 ## Tasks
 
+- [x] 0. Create environment configuration and security setup
+  - [x] 0.1 Create `.env.local` with AWS credentials and demo password
+    - Created `.env.local` with: `DEMO_PASSWORD`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `S3_BUCKET_NAME`
+    - Bucket: `document-digitization-hackathon` in `us-east-1`
+    - _Requirements: 1.1, 11.1_
+
+  - [x] 0.2 Create `.gitignore` with security rules
+    - Added `.env*` patterns to prevent credential leaks
+    - Added `node_modules/`, `.next/`, `build/`, `coverage/`, OS files, IDE files
+    - _Requirements: Security best practice_
+
 - [ ] 1. Set up project structure, dependencies, and core configuration
   - [ ] 1.1 Initialize Next.js 14 project with App Router, Tailwind CSS, and install all dependencies
     - Run `npx create-next-app@14` with App Router and Tailwind CSS enabled
@@ -324,7 +335,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
 ```json
 {
   "waves": [
-    { "id": 0, "tasks": ["1.1"] },
+    { "id": 0, "tasks": ["0.1", "0.2", "1.1"] },
     { "id": 1, "tasks": ["1.2", "1.3", "1.4"] },
     { "id": 2, "tasks": ["2.1", "2.2"] },
     { "id": 3, "tasks": ["2.3", "4.1"] },

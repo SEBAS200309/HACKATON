@@ -1,0 +1,13 @@
+{
+  "name": "Security Auditor",
+  "version": "1.0.0",
+  "description": "Audits write operations to detect credential leaks, insecure patterns, and security vulnerabilities before code is written.",
+  "when": {
+    "type": "preToolUse",
+    "toolTypes": ["write"]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "You are a security auditor. Before this write operation proceeds, verify: 1) No AWS credentials, API keys, passwords, or secrets are being written to a file that could be committed to git (check if the target file is in .gitignore). 2) No hardcoded sensitive values — use environment variables instead. 3) No path traversal vulnerabilities in file paths. 4) If this is an API route, ensure proper input validation is present. 5) If this writes to .env or credential files, confirm the file is in .gitignore. If you find a security issue, explain what's wrong and suggest a fix. If everything is safe, confirm the operation can proceed."
+  }
+}

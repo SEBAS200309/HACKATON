@@ -60,8 +60,8 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Apply AA contrast ratio (4.5:1 minimum), mobile-first responsive
     - _Requirements: 1.1, 1.5_
 
-- [ ] 2. Implement storage service and authentication
-  - [~] 2.1 Create S3 storage service wrapper
+- [x] 2. Implement storage service and authentication
+  - [x] 2.1 Create S3 storage service wrapper
     - Create `src/services/storageService.ts` implementing `StorageService` interface
     - Methods: `putObject`, `getObject`, `deleteObject`, `getPresignedDownloadUrl` (1 hour expiry), `getJsonIndex`, `updateJsonIndex`
     - Use `@aws-sdk/client-s3` with `PutObjectCommand`, `GetObjectCommand`, `DeleteObjectCommand`
@@ -69,7 +69,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - S3 bucket structure: `templates/`, `sources/`, `generated/`, `configs/` prefixes
     - _Requirements: 11.1, 11.2, 11.4, 11.5, 11.7_
 
-  - [~] 2.2 Implement auth API route and login page
+  - [x] 2.2 Implement auth API route and login page
     - Create `src/app/api/auth/login/route.ts` — POST endpoint comparing password against `process.env.DEMO_PASSWORD`
     - Return success/failure response; store auth state in cookie or zustand
     - Create `src/app/login/page.tsx` with password input, purple primary button
@@ -78,7 +78,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Redirect unauthenticated users to login
     - _Requirements: 1.1, 1.2, 1.5_
 
-  - [~] 2.3 Write unit tests for storage service and auth
+  - [x] 2.3 Write unit tests for storage service and auth
     - Test S3 service methods with mocked AWS SDK (putObject, getObject, deleteObject, presigned URL generation)
     - Test login endpoint with valid and invalid credentials
     - Test middleware redirect behavior

@@ -11,11 +11,11 @@ The application follows a **Next.js 14 App Router** architecture with a serverle
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
 | Framework | Next.js 14 (App Router) | Full-stack React with serverless API routes, SSR, mobile-first support |
-| OCR Engine | Amazon Textract (DetectDocumentText) | Handles printed and handwritten text, returns bounding boxes and confidence scores |
+| OCR Engine | Amazon Textract (DetectDocumentText + full-document strategy) | Handles printed and handwritten text (handwriting only in English), returns per-word bounding boxes and confidence scores. Single API call per document with client-side coordinate filtering |
 | Template Engine | docxtemplater | Mature library supporting `{{placeholder}}` syntax natively for .docx |
 | Excel Handling | ExcelJS | Read/write .xlsx with cell-level control, header extraction, row appending |
 | PDF Conversion | libreoffice-convert (Lambda layer) | Reliable .docx → PDF via LibreOffice headless in AWS Lambda |
-| File Storage | Amazon S3 + presigned URLs | Direct browser-to-S3 upload, avoids 4.5MB Lambda payload limit |
+| File Storage | Amazon S3 + presigned URLs (10-min expiry) | Direct browser-to-S3 upload, avoids 6MB Lambda payload limit. Presigned URLs expire after 10 minutes for security |
 | Authentication | NextAuth.js with credentials provider | Session-based auth with configurable inactivity timeout |
 | Database | Amazon DynamoDB | Serverless, pay-per-request, ideal for file metadata and user records |
 | Styling | Tailwind CSS | Utility-first, dark mode native, responsive with mobile-first approach |
@@ -88,9 +88,11 @@ sequenceDiagram
     U->>FE: Define areas of interest
     U->>FE: Initiate OCR
     FE->>API: POST /api/ocr/process
-    API->>S3: Get document
-    API->>TX: DetectDocumentText (cropped regions)
-    TX-->>API: Extracted text + confidence
+    API->>S3: Get document image
+    API->>TX: DetectDocumentText (full document)
+    TX-->>API: All blocks with BoundingBox + confidence
+    API->>API: Filter blocks by area coordinates
+    API->>API: Aggregate confidence per area (min of word confidences)
     API-->>FE: Results per variable
 
     U->>FE: Review & correct text
@@ -112,6 +114,41 @@ sequenceDiagram
 - **DynamoDB**: On-demand capacity for metadata storage
 - **Lambda (PDF)**: Separate Lambda function with LibreOffice layer for .docx → PDF conversion
 - **Textract**: Invoked via AWS SDK from API routes
+
+### AWS Service Constraints (from official documentation)
+
+| Service | Constraint | Impact on Design |
+|---------|-----------|-----------------|
+| Textract (sync) | Max 10MB per document, 1 page for PDF/TIFF | Source documents must be single-page images (PNG/JPG preferred). PDFs limited to 1 page. |
+| Textract (sync) | Supported formats: JPEG, PNG, PDF, TIFF | Aligns with accepted source document formats |
+| Textract | Handwriting recognition: English only | Handwritten text in Spanish may have reduced accuracy. Printed Spanish characters (ñ, á, é, etc.) are fully supported. |
+| Textract | Min character height: 15px (8pt at 150 DPI) | Documents should be scanned at ≥150 DPI for reliable detection |
+| Textract | Confidence score is per Block (LINE/WORD), not per region | Confidence per Area_de_Interes is calculated as min(confidence) of all WORD blocks within the area boundaries |
+| S3 Presigned URLs | Expiration must be set explicitly | URLs configured with 10-minute expiry. Bucket policy enforces `s3:signatureAge` ≤ 600000ms |
+| S3 | No built-in per-user isolation | Isolation enforced via prefix `users/{userId}/` and IAM policy with `s3:prefix` condition key |
+| Lambda | Max payload 6MB (sync invocation) | Presigned URLs bypass this for file uploads. PDF conversion Lambda receives S3 key references, not file bytes |
+| DynamoDB | Item size limit 400KB | OCR results stored as Map within document item; large result sets may need to reference S3 |
+
+### OCR Processing Strategy
+
+The system uses a **full-document, single-call** approach rather than per-area cropping:
+
+1. The full Documento_Fuente image is sent to Textract `DetectDocumentText` in a single API call
+2. Textract returns all detected blocks (PAGE, LINE, WORD) with BoundingBox coordinates (normalized 0–1)
+3. The API filters WORD blocks whose BoundingBox overlaps with each Area_de_Interes
+4. For each area, all overlapping words are concatenated in reading order (top-to-bottom, left-to-right)
+5. The confidence score per area is computed as `min(confidence)` of all WORD blocks within that area
+6. If no words overlap an area, the result is empty with confidence 0%
+
+**Advantages over per-area cropping:**
+- Single Textract API call regardless of number of areas (lower cost and latency)
+- No image manipulation needed server-side (no sharp/jimp dependency for cropping)
+- Avoids potential text truncation at crop boundaries
+- Textract's BoundingBox coordinates are already normalized (0–1), matching the area coordinate system
+
+**Fallback**: If the document exceeds 10MB (Textract sync limit), the system will:
+1. Attempt to compress the image using sharp (reduce quality to 85%, max dimension 4000px)
+2. If still >10MB after compression, reject with error "El documento excede el tamaño máximo para procesamiento OCR. Reduzca la resolución e intente nuevamente"
 
 ---
 
@@ -253,12 +290,22 @@ interface TemplateService {
 
 // --- OCR Service ---
 interface OcrService {
-  processAreas(
+  processDocument(
     documentKey: string,
     areas: AreaOfInterest[],
     documentDimensions: { width: number; height: number }
   ): Promise<OcrResult[]>;
-  cropImageToArea(imageBuffer: Buffer, area: AreaOfInterest, dimensions: Dimensions): Promise<Buffer>;
+  detectText(documentKey: string): Promise<TextractBlock[]>;
+  filterBlocksByArea(blocks: TextractBlock[], area: AreaOfInterest): TextractBlock[];
+  aggregateConfidence(blocks: TextractBlock[]): number;
+  compressImageIfNeeded(imageBuffer: Buffer, maxSizeBytes: number): Promise<Buffer>;
+}
+
+interface TextractBlock {
+  blockType: 'PAGE' | 'LINE' | 'WORD';
+  text?: string;
+  confidence: number;
+  boundingBox: { width: number; height: number; left: number; top: number };
 }
 
 // --- Document Generation Service ---
@@ -278,8 +325,8 @@ interface ConfigurationService {
 
 // --- Storage Service ---
 interface StorageService {
-  generatePresignedUploadUrl(key: string, contentType: string, maxSizeBytes: number): Promise<string>;
-  generatePresignedDownloadUrl(key: string, expiresIn?: number): Promise<string>;
+  generatePresignedUploadUrl(key: string, contentType: string, maxSizeBytes: number, expiresInSeconds?: number): Promise<string>; // default: 600 (10 min)
+  generatePresignedDownloadUrl(key: string, expiresInSeconds?: number): Promise<string>; // default: 3600 (1 hour)
   getObject(key: string): Promise<Buffer>;
   putObject(key: string, body: Buffer, contentType: string): Promise<void>;
   deleteObject(key: string): Promise<void>;
@@ -382,7 +429,8 @@ interface AreaOfInterest {
 interface OcrResult {
   variableName: string;
   extractedText: string;
-  confidence: number; // 0–100
+  confidence: number; // 0–100, aggregated as min(confidence) of all WORD blocks within the area
+  wordCount: number;  // number of detected words in this area
   boundingBox: { x: number; y: number; width: number; height: number };
 }
 
@@ -533,9 +581,9 @@ s3://document-digitization-{env}/
 
 **Validates: Requirements 6.2**
 
-### Property 14: Image crop to area boundaries
+### Property 14: BoundingBox overlap detection for area filtering
 
-*For any* source document image and any Area_de_Interes with percentage coordinates, the crop function SHALL produce an image region corresponding exactly to the pixel boundaries calculated as (x * imgWidth, y * imgHeight, width * imgWidth, height * imgHeight), ensuring no content outside the area is included and no content inside is excluded.
+*For any* source document processed by Textract and any Area_de_Interes with normalized coordinates (x, y, width, height in range [0,1]), the filtering function SHALL include a WORD block if and only if the block's BoundingBox (left, top, width, height) overlaps with the area boundaries. Overlap is defined as: block.left < area.x + area.width AND block.left + block.width > area.x AND block.top < area.y + area.height AND block.top + block.height > area.y.
 
 **Validates: Requirements 7.1**
 
@@ -604,6 +652,7 @@ interface ApiErrorResponse {
 | `UPLOAD_NETWORK_ERROR` | 503 | "Error al cargar el archivo. Verifique su conexión e intente nuevamente" |
 | `OCR_PROCESSING_FAILED` | 502 | "Error en el procesamiento OCR. Verifique la calidad del documento e intente nuevamente" |
 | `OCR_TIMEOUT` | 504 | "Error en el procesamiento OCR. Verifique la calidad del documento e intente nuevamente" |
+| `OCR_DOCUMENT_TOO_LARGE` | 400 | "El documento excede el tamaño máximo para procesamiento OCR. Reduzca la resolución e intente nuevamente" |
 | `PDF_CONVERSION_FAILED` | 502 | "Error al generar el documento PDF. Intente nuevamente" |
 | `XLSX_GENERATION_FAILED` | 502 | "Error al completar la plantilla Excel. Intente nuevamente" |
 | `STORAGE_FAILED` | 503 | "Error al almacenar el archivo. Intente nuevamente" |
@@ -666,7 +715,7 @@ The testing strategy uses a dual approach combining property-based tests for uni
 | 11: Variable-to-template match | `validation.property.test.ts` | `fc.record({ name: fc.string(), set: fc.array(fc.string()) })` |
 | 12: Variable uniqueness | `area-editor.property.test.ts` | `fc.array(fc.string({ minLength: 1 }))` for name sets |
 | 13: Coordinate conversion | `configuration.property.test.ts` | `fc.record({ x: fc.nat(), y: fc.nat(), w: fc.nat(), h: fc.nat(), docW: fc.integer({min:1}), docH: fc.integer({min:1}) })` |
-| 14: Image crop boundaries | `ocr.property.test.ts` | Percentage coords + image dimensions |
+| 14: BoundingBox overlap | `ocr.property.test.ts` | Two bounding boxes with random normalized coords |
 | 15: Confidence classification | `ocr.property.test.ts` | `fc.integer({ min: 0, max: 100 })` |
 | 16: Filename generation | `document.property.test.ts` | `fc.record({ templateName: fc.string(), date: fc.date() })` |
 | 17: XLSX row appending | `xlsx.property.test.ts` | `fc.array(fc.record({ vars: fc.dictionary(fc.string(), fc.string()) }))` |

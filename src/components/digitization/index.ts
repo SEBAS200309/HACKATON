@@ -4,3 +4,4 @@ export { default as AreaList } from "./AreaList";
 export { default as VariableAssigner } from "./VariableAssigner";
 export { default as ConfigurationToolbar } from "./ConfigurationToolbar";
 export { default as OcrResultsPanel } from "./OcrResultsPanel";
+export { default as DownloadPanel } from "./DownloadPanel";

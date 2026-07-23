@@ -243,21 +243,21 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Approve button with validation: block if any required field is empty, show "Existen campos vacíos o inválidos. Revise los campos marcados antes de aprobar"
     - _Requirements: 7.4, 7.6, 7.8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.8, 8.9, 8.10_
 
-  - [ ]* 8.4 Write property tests for OCR processing (Properties 9, 10)
+  - [x]* 8.4 Write property tests for OCR processing (Properties 9, 10)
     - **Property 9: BoundingBox overlap detection** — Include block iff overlap formula holds for normalized coordinates
     - **Validates: Requirements 7.1**
     - **Property 10: OCR confidence severity classification** — 0%/empty→red, >0%&<80%→yellow, ≥80%→none
     - **Validates: Requirements 7.6, 8.3, 8.9**
 
-- [ ] 9. Implement document generation and download
-  - [ ] 9.1 Create document generation service
+- [x] 9. Implement document generation and download
+  - [x] 9.1 Create document generation service
     - Create `src/services/documentGenerationService.ts` implementing `DocumentGenerationService` interface
     - `fillWordTemplate(templateKey, variables)`: load .docx from S3, create PizZip instance, use docxtemplater to fill `{{placeholder}}` with variable values, return completed Buffer
     - `fillXlsxTemplate(templateKey, variables)`: load .xlsx from S3 with ExcelJS, find last row with data, append new row mapping variable names to column headers (case-sensitive match), return Buffer
     - Handle missing variables gracefully: leave placeholder empty if variable not provided
     - _Requirements: 9.1, 9.4, 9.5, 10.1, 10.2, 10.8_
 
-  - [ ] 9.2 Create document generate API route
+  - [x] 9.2 Create document generate API route
     - Create `src/app/api/documents/generate/route.ts` — POST endpoint
     - Accept body: `{ templateId: string, xlsxTemplateId?: string, variables: Record<string, string>, sourceDocumentKey: string }`
     - Generate completed .docx via documentGenerationService
@@ -268,7 +268,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Return download URLs and generated document metadata
     - _Requirements: 9.4, 9.5, 9.6, 9.8, 10.2, 10.3, 10.4_
 
-  - [ ] 9.3 Create download panel component
+  - [x] 9.3 Create download panel component
     - Create `src/components/digitization/DownloadPanel.tsx`
     - Download .docx button: enabled immediately after generation completes
     - Download .xlsx button: shown only if XLSX template was selected, enabled after generation

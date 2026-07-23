@@ -86,7 +86,7 @@ export default function OcrResultsPanel({
   );
 
   // Mapear áreas por nombre de variable para renderizar overlays
-  const areasByVariable = useMemo(() => {
+  const _areasByVariable = useMemo(() => {
     const map = new Map<string, AreaOfInterest>();
     for (const area of areas) {
       map.set(area.variableName, area);

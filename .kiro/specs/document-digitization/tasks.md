@@ -283,8 +283,8 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - **Property 12: XLSX row appending without overwrite** — Each digitization appends new row, previous data unchanged, row count = header + digitization count
     - **Validates: Requirements 10.2, 10.8**
 
-- [ ] 10. Implement main digitization flow and dashboard
-  - [ ] 10.1 Create digitization page with step wizard
+- [x] 10. Implement main digitization flow and dashboard
+  - [x] 10.1 Create digitization page with step wizard
     - Create `src/app/digitize/page.tsx` with step-by-step flow:
       1. Select Word template (required) + optional XLSX template
       2. Capture/upload source document
@@ -298,7 +298,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Enable Word template selection before XLSX (XLSX option appears after Word selected)
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.10, 5.10, 8.6_
 
-  - [ ] 10.2 Create dashboard page
+  - [x] 10.2 Create dashboard page
     - Create `src/app/dashboard/page.tsx` as landing page after login
     - Quick action buttons: "Nueva Digitalización", "Gestionar Plantillas"
     - Recent activity summary: count of documents processed (from generated/index.json)
@@ -311,7 +311,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Verify correct wiring between components and API routes
     - _Requirements: 4.1, 7.1, 9.1, 10.2_
 
-- [ ] 11. Final checkpoint - Full integration verification
+- [x] 11. Final checkpoint - Full integration verification
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

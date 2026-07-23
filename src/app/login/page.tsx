@@ -2,6 +2,7 @@
 
 import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { useAppStore } from "@/store/useAppStore";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -22,6 +23,8 @@ export default function LoginPage() {
       });
 
       if (response.ok) {
+        // Update Zustand store so client-side auth guards work
+        useAppStore.setState({ isAuthenticated: true });
         router.push("/dashboard");
       } else {
         const data = await response.json();

@@ -211,8 +211,8 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
 - [x] 7. Checkpoint - Ensure template management and area editor work end-to-end
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 8. Implement OCR processing
-  - [ ] 8.1 Create OCR service with Textract integration
+- [x] 8. Implement OCR processing
+  - [x] 8.1 Create OCR service with Textract integration
     - Create `src/services/ocrService.ts` implementing `OcrService` interface
     - `detectText(imageBytes)`: call Textract `DetectDocumentText` on full document image, return all blocks
     - `filterBlocksByArea(blocks, area)`: filter WORD blocks using BoundingBox overlap formula:
@@ -221,7 +221,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - `processDocument(documentKey, areas)`: orchestrate full flow — fetch from S3, call Textract once, filter per area, concatenate words in reading order (top-to-bottom, left-to-right)
     - _Requirements: 7.1, 7.2, 7.6, 7.7, 7.8_
 
-  - [ ] 8.2 Create OCR process API route
+  - [x] 8.2 Create OCR process API route
     - Create `src/app/api/ocr/process/route.ts` — POST endpoint
     - Accept body: `{ documentKey: string, areas: AreaOfInterest[] }`
     - Fetch document bytes from S3, call ocrService.processDocument
@@ -230,7 +230,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Error responses in Spanish per design error codes
     - _Requirements: 7.1, 7.2, 7.3, 7.5, 7.9_
 
-  - [ ] 8.3 Create OCR results panel component
+  - [x] 8.3 Create OCR results panel component
     - Create `src/components/digitization/OcrResultsPanel.tsx`
     - Editable text fields per variable showing extracted text
     - Confidence indicators per design:

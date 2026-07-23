@@ -81,7 +81,7 @@ class TemplateServiceImpl implements TemplateService {
    */
   async extractXlsxHeaders(xlsxBuffer: Buffer): Promise<string[]> {
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(xlsxBuffer);
+    await workbook.xlsx.load(xlsxBuffer as unknown as ArrayBuffer);
 
     const worksheet = workbook.worksheets[0];
     if (!worksheet) {
@@ -121,7 +121,7 @@ class TemplateServiceImpl implements TemplateService {
   async validateXlsxStructure(buffer: Buffer): Promise<boolean> {
     try {
       const workbook = new ExcelJS.Workbook();
-      await workbook.xlsx.load(buffer);
+      await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
       return true;
     } catch {
       return false;

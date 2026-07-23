@@ -128,20 +128,20 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Duplicate name handling: prompt user to confirm replacement or rename
     - _Requirements: 2.4, 2.5, 2.8, 2.9, 2.11, 3.5, 3.6, 3.8_
 
-  - [ ]* 4.5 Write property tests for file validation (Properties 1, 2)
+  - [x]* 4.5 Write property tests for file validation (Properties 1, 2)
     - **Property 1: File format validation** — For any file extension and target type, validate acceptance/rejection rules (`.docx` for word, `.xlsx` for xlsx, `.pdf`/`.png`/`.jpg` for source)
     - **Validates: Requirements 2.2, 3.2, 4.7, 4.13**
     - **Property 2: File size validation** — For any file size, validate ≤25MB acceptance and >25MB rejection
     - **Validates: Requirements 2.10, 3.9**
 
-  - [ ]* 4.6 Write property tests for template extraction (Properties 3, 4)
+  - [x]* 4.6 Write property tests for template extraction (Properties 3, 4)
     - **Property 3: Word template placeholder extraction (round-trip)** — For any .docx with `{{var}}` patterns, extraction returns exact set of variable names without duplicates
     - **Validates: Requirements 2.7**
     - **Property 4: XLSX header extraction** — For any .xlsx, extraction returns all non-empty first-row cells in column order
     - **Validates: Requirements 3.3, 3.4**
 
-- [ ] 5. Implement document capture and area editor
-  - [~] 5.1 Create document capture component
+- [x] 5. Implement document capture and area editor
+  - [x] 5.1 Create document capture component
     - Create `src/components/digitization/DocumentCapture.tsx` with two modes:
       - `CameraCapture`: access device camera via `navigator.mediaDevices.getUserMedia`, capture photo as blob, display viewfinder
       - `FileUpload`: accept PDF/PNG/JPG via file input and drag-drop, validate extension and size client-side
@@ -151,7 +151,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Allow retake/replace: discard current and return to capture step
     - _Requirements: 4.5, 4.6, 4.7, 4.8, 4.9, 4.11, 4.12, 4.13_
 
-  - [~] 5.2 Create canvas area editor component
+  - [x] 5.2 Create canvas area editor component
     - Create `src/components/digitization/AreaEditor.tsx` containing:
       - `CanvasOverlay`: HTML5 Canvas overlay on document image for drawing/resizing/moving/deleting rectangles
       - `AreaList`: list of defined areas with variable names, colors, delete/edit actions
@@ -162,7 +162,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Support: draw new, select existing, resize handles, drag to reposition, delete (key or button)
     - _Requirements: 5.1, 5.2, 5.7, 5.8, 6.2_
 
-  - [~] 5.3 Create variable assignment and validation logic
+  - [x] 5.3 Create variable assignment and validation logic
     - Create `src/utils/variableValidation.ts` with validation functions:
       - `validateVariableFormat(name)`: only alphanumeric + underscore (`/^[a-zA-Z0-9_]+$/`)
       - `validateVariableLength(name)`: between 1 and 50 characters
@@ -174,7 +174,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Block when duplicate: "La variable '[nombre]' ya está asignada a otra área. Cada variable solo puede usarse una vez"
     - _Requirements: 5.3, 5.4, 5.5, 5.6, 5.9, 5.11_
 
-  - [ ]* 5.4 Write property tests for variable validation (Properties 5, 6, 7, 13)
+  - [x]* 5.4 Write property tests for variable validation (Properties 5, 6, 7, 13)
     - **Property 5: Variable name format validation with priority ordering** — Validate format→length→match order, report first failure only
     - **Validates: Requirements 5.3, 5.11**
     - **Property 6: Variable-to-template matching (case-sensitive)** — Exact string match, no partial/case-insensitive
@@ -184,12 +184,12 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - **Property 13: Area minimum size validation** — Accept ≥10x10px, reject smaller
     - **Validates: Requirements 5.2**
 
-  - [ ]* 5.5 Write property test for coordinate conversion (Property 8)
+  - [x]* 5.5 Write property test for coordinate conversion (Property 8)
     - **Property 8: Coordinate percentage conversion** — Pixel coords converted to percentages (0–1) via division by document dimensions
     - **Validates: Requirements 6.2**
 
-- [ ] 6. Implement configuration save/load
-  - [~] 6.1 Create configuration service
+- [x] 6. Implement configuration save/load
+  - [x] 6.1 Create configuration service
     - Create `src/services/configurationService.ts` implementing `ConfigurationService` interface
     - `saveConfiguration(config)`: store JSON at `configs/{templateId}/{configName}.json`, update `configs/index.json`
     - `loadConfiguration(templateId, configName)`: retrieve and parse saved config from S3
@@ -198,7 +198,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Store coordinates as percentage-based positions with area dimensions and variable names
     - _Requirements: 6.1, 6.2, 6.3, 6.5, 6.6, 6.7, 6.9_
 
-  - [~] 6.2 Create configuration UI components
+  - [x] 6.2 Create configuration UI components
     - Add save/load buttons to AreaEditor toolbar
     - Save: modal for configuration name input, success message "Configuración guardada exitosamente"
     - Load: dropdown selector showing available configs (name, area count, last modified)
@@ -208,11 +208,11 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Auto-save to localStorage every 30 seconds while editing areas
     - _Requirements: 6.1, 6.3, 6.4, 6.5, 6.6, 6.8, 6.10_
 
-- [~] 7. Checkpoint - Ensure template management and area editor work end-to-end
+- [x] 7. Checkpoint - Ensure template management and area editor work end-to-end
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 8. Implement OCR processing
-  - [~] 8.1 Create OCR service with Textract integration
+  - [ ] 8.1 Create OCR service with Textract integration
     - Create `src/services/ocrService.ts` implementing `OcrService` interface
     - `detectText(imageBytes)`: call Textract `DetectDocumentText` on full document image, return all blocks
     - `filterBlocksByArea(blocks, area)`: filter WORD blocks using BoundingBox overlap formula:
@@ -221,7 +221,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - `processDocument(documentKey, areas)`: orchestrate full flow — fetch from S3, call Textract once, filter per area, concatenate words in reading order (top-to-bottom, left-to-right)
     - _Requirements: 7.1, 7.2, 7.6, 7.7, 7.8_
 
-  - [~] 8.2 Create OCR process API route
+  - [ ] 8.2 Create OCR process API route
     - Create `src/app/api/ocr/process/route.ts` — POST endpoint
     - Accept body: `{ documentKey: string, areas: AreaOfInterest[] }`
     - Fetch document bytes from S3, call ocrService.processDocument
@@ -230,7 +230,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Error responses in Spanish per design error codes
     - _Requirements: 7.1, 7.2, 7.3, 7.5, 7.9_
 
-  - [~] 8.3 Create OCR results panel component
+  - [ ] 8.3 Create OCR results panel component
     - Create `src/components/digitization/OcrResultsPanel.tsx`
     - Editable text fields per variable showing extracted text
     - Confidence indicators per design:
@@ -250,14 +250,14 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - **Validates: Requirements 7.6, 8.3, 8.9**
 
 - [ ] 9. Implement document generation and download
-  - [~] 9.1 Create document generation service
+  - [ ] 9.1 Create document generation service
     - Create `src/services/documentGenerationService.ts` implementing `DocumentGenerationService` interface
     - `fillWordTemplate(templateKey, variables)`: load .docx from S3, create PizZip instance, use docxtemplater to fill `{{placeholder}}` with variable values, return completed Buffer
     - `fillXlsxTemplate(templateKey, variables)`: load .xlsx from S3 with ExcelJS, find last row with data, append new row mapping variable names to column headers (case-sensitive match), return Buffer
     - Handle missing variables gracefully: leave placeholder empty if variable not provided
     - _Requirements: 9.1, 9.4, 9.5, 10.1, 10.2, 10.8_
 
-  - [~] 9.2 Create document generate API route
+  - [ ] 9.2 Create document generate API route
     - Create `src/app/api/documents/generate/route.ts` — POST endpoint
     - Accept body: `{ templateId: string, xlsxTemplateId?: string, variables: Record<string, string>, sourceDocumentKey: string }`
     - Generate completed .docx via documentGenerationService
@@ -268,7 +268,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Return download URLs and generated document metadata
     - _Requirements: 9.4, 9.5, 9.6, 9.8, 10.2, 10.3, 10.4_
 
-  - [~] 9.3 Create download panel component
+  - [ ] 9.3 Create download panel component
     - Create `src/components/digitization/DownloadPanel.tsx`
     - Download .docx button: enabled immediately after generation completes
     - Download .xlsx button: shown only if XLSX template was selected, enabled after generation
@@ -284,7 +284,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - **Validates: Requirements 10.2, 10.8**
 
 - [ ] 10. Implement main digitization flow and dashboard
-  - [~] 10.1 Create digitization page with step wizard
+  - [ ] 10.1 Create digitization page with step wizard
     - Create `src/app/digitize/page.tsx` with step-by-step flow:
       1. Select Word template (required) + optional XLSX template
       2. Capture/upload source document
@@ -298,7 +298,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Enable Word template selection before XLSX (XLSX option appears after Word selected)
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.10, 5.10, 8.6_
 
-  - [~] 10.2 Create dashboard page
+  - [ ] 10.2 Create dashboard page
     - Create `src/app/dashboard/page.tsx` as landing page after login
     - Quick action buttons: "Nueva Digitalización", "Gestionar Plantillas"
     - Recent activity summary: count of documents processed (from generated/index.json)
@@ -311,7 +311,7 @@ Implementación MVP de una aplicación Next.js 14 (App Router) para digitalizaci
     - Verify correct wiring between components and API routes
     - _Requirements: 4.1, 7.1, 9.1, 10.2_
 
-- [~] 11. Final checkpoint - Full integration verification
+- [ ] 11. Final checkpoint - Full integration verification
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

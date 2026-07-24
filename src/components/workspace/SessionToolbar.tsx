@@ -209,14 +209,21 @@ export default function SessionToolbar({ onResetConfirmed }: SessionToolbarProps
           color: ZONE_COLORS[index % ZONE_COLORS.length],
         }));
 
-        // Apply zones to all pages
-        const currentPages = useAppStore.getState().pages;
-        const updatedPages = currentPages.map((page) => ({
+        // Apply zones to all pages and update availableVariables
+        const currentState = useAppStore.getState();
+        const updatedPages = currentState.pages.map((page) => ({
           ...page,
           zones,
         }));
 
-        useAppStore.setState({ pages: updatedPages });
+        // Recalcular assigned en availableVariables
+        const allZoneVarNames = new Set(zones.map((z) => z.variableName));
+        const updatedVariables = currentState.availableVariables.map((v) => ({
+          ...v,
+          assigned: allZoneVarNames.has(v.name),
+        }));
+
+        useAppStore.setState({ pages: updatedPages, availableVariables: updatedVariables });
         addToast({ type: "success", message: "Configuración aplicada a todas las páginas" });
       } catch {
         addToast({ type: "error", message: "Error de conexión al aplicar la configuración" });

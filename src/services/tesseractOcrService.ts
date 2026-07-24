@@ -35,7 +35,8 @@ async function getTrainedDataPath(): Promise<string> {
 
   for (const bundledPath of bundledPaths) {
     if (fs.existsSync(bundledPath)) {
-      return path.dirname(bundledPath);
+      // Normalizar a forward slashes para compatibilidad con tesseract.js
+      return path.dirname(bundledPath).replace(/\\/g, '/');
     }
   }
 
@@ -44,7 +45,7 @@ async function getTrainedDataPath(): Promise<string> {
   const tmpFile = path.join(tmpDir, 'spa.traineddata');
 
   if (fs.existsSync(tmpFile)) {
-    return tmpDir;
+    return tmpDir.replace(/\\/g, '/');
   }
 
   // Opción 3: Descargar desde S3 y cachear en /tmp
@@ -55,10 +56,11 @@ async function getTrainedDataPath(): Promise<string> {
 
     const trainedDataBuffer = await storageService.getObject('trained-data/spa.traineddata');
     fs.writeFileSync(tmpFile, trainedDataBuffer);
-    return tmpDir;
+    return tmpDir.replace(/\\/g, '/');
   } catch (error) {
     // Si no hay traineddata disponible, usar el path por defecto de Tesseract.js
-    // (intentará descargar automáticamente)
+    // (intentará descargar automáticamente — puede fallar si CDN no tiene la versión)
+    console.error('No se pudo obtener spa.traineddata:', error instanceof Error ? error.message : String(error));
     return '';
   }
 }
@@ -95,11 +97,15 @@ async function initialize(): Promise<Tesseract.Worker> {
         workerOptions.cachePath = langPath;
       }
 
-      const worker = await createWorker(
-        'spa',
-        1, // OEM.LSTM_ONLY
-        workerOptions as any
-      );
+      // Timeout para inicialización (30s) — cargar traineddata puede tomar tiempo
+      const initTimeout = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Timeout al inicializar worker OCR')), 30_000);
+      });
+
+      const worker = await Promise.race([
+        createWorker('spa', 1, workerOptions as any),
+        initTimeout,
+      ]) as Tesseract.Worker;
 
       workerInstance = worker;
     } catch (error) {

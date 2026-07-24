@@ -382,21 +382,35 @@ export const useAppStore = create<AppState>()((set, get) => ({
   },
 
   addZone: (pageId, zone) => {
-    set((state) => ({
-      pages: state.pages.map((p) =>
+    set((state) => {
+      const newPages = state.pages.map((p) =>
         p.id === pageId ? { ...p, zones: [...p.zones, zone] } : p
-      ),
-    }));
+      );
+      // Recalcular assigned en availableVariables basándose en las zonas actuales
+      const allZoneVarNames = new Set(newPages.flatMap((p) => p.zones.map((z) => z.variableName)));
+      const updatedVariables = state.availableVariables.map((v) => ({
+        ...v,
+        assigned: allZoneVarNames.has(v.name),
+      }));
+      return { pages: newPages, availableVariables: updatedVariables };
+    });
   },
 
   removeZone: (pageId, zoneId) => {
-    set((state) => ({
-      pages: state.pages.map((p) =>
+    set((state) => {
+      const newPages = state.pages.map((p) =>
         p.id === pageId
           ? { ...p, zones: p.zones.filter((z) => z.id !== zoneId) }
           : p
-      ),
-    }));
+      );
+      // Recalcular assigned
+      const allZoneVarNames = new Set(newPages.flatMap((p) => p.zones.map((z) => z.variableName)));
+      const updatedVariables = state.availableVariables.map((v) => ({
+        ...v,
+        assigned: allZoneVarNames.has(v.name),
+      }));
+      return { pages: newPages, availableVariables: updatedVariables };
+    });
   },
 
   propagateZones: (fromPageId, toAll) => {
@@ -406,13 +420,20 @@ export const useAppStore = create<AppState>()((set, get) => ({
     const sourcePage = state.pages.find((p) => p.id === fromPageId);
     if (!sourcePage) return;
 
-    set({
-      pages: state.pages.map((p) =>
-        p.id === fromPageId
-          ? p
-          : { ...p, zones: sourcePage.zones.map((z) => ({ ...z })) }
-      ),
-    });
+    const newPages = state.pages.map((p) =>
+      p.id === fromPageId
+        ? p
+        : { ...p, zones: sourcePage.zones.map((z) => ({ ...z })) }
+    );
+
+    // Recalcular assigned
+    const allZoneVarNames = new Set(newPages.flatMap((p) => p.zones.map((z) => z.variableName)));
+    const updatedVariables = state.availableVariables.map((v) => ({
+      ...v,
+      assigned: allZoneVarNames.has(v.name),
+    }));
+
+    set({ pages: newPages, availableVariables: updatedVariables });
   },
 
   updateRecord: (pageId, variableName, value) => {

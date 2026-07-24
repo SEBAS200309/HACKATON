@@ -19,13 +19,7 @@ export function useWorkspaceCache() {
    * 3. Si no, la descarga desde imageUrl/S3 y la almacena en caché.
    */
   const loadPageImage = useCallback(async (page: WorkspacePage): Promise<string> => {
-    // Si la página tiene una URL que es un blob/object URL (creada durante captura),
-    // usarla directamente — no necesita caché
-    if (page.imageUrl && page.imageUrl.startsWith('blob:')) {
-      return page.imageUrl;
-    }
-
-    // Verificar caché local por s3Key
+    // Verificar caché local por s3Key primero (máxima prioridad)
     if (page.imageS3Key && imageCache.has(page.imageS3Key)) {
       const cachedUrl = imageCache.get(page.imageS3Key);
       if (cachedUrl) {
@@ -33,25 +27,64 @@ export function useWorkspaceCache() {
       }
     }
 
+    // Si la página tiene una URL blob válida, verificar que aún exista
+    if (page.imageUrl && page.imageUrl.startsWith('blob:')) {
+      try {
+        // Intentar hacer HEAD request para verificar que el blob URL sigue vivo
+        const response = await fetch(page.imageUrl, { method: 'HEAD' });
+        if (response.ok) {
+          return page.imageUrl;
+        }
+      } catch {
+        // Blob URL inválida (revocada o de sesión anterior)
+        // Intentar obtener la imagen desde S3 via presigned URL
+      }
+    }
+
+    // Si tiene s3Key, obtener presigned URL via API
+    if (page.imageS3Key) {
+      try {
+        const response = await fetch(`/api/upload/presign?key=${encodeURIComponent(page.imageS3Key)}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.url) {
+            // Descargar el blob y cachearlo
+            const imgResponse = await fetch(data.url);
+            if (imgResponse.ok) {
+              const blob = await imgResponse.blob();
+              const cachedUrl = imageCache.set(page.imageS3Key, blob);
+              return cachedUrl;
+            }
+          }
+        }
+      } catch {
+        // Fallback silencioso
+      }
+    }
+
+    // Si la imageUrl no es blob (URL directa), intentar usarla
+    if (page.imageUrl && !page.imageUrl.startsWith('blob:')) {
+      try {
+        const response = await fetch(page.imageUrl);
+        if (response.ok) {
+          const blob = await response.blob();
+          if (page.imageS3Key) {
+            const cachedUrl = imageCache.set(page.imageS3Key, blob);
+            return cachedUrl;
+          }
+          return page.imageUrl;
+        }
+      } catch {
+        // Fallback
+      }
+    }
+
     // Si no hay s3Key pero sí imageUrl, retornar directamente (compatibilidad)
-    if (!page.imageS3Key && page.imageUrl) {
+    if (page.imageUrl) {
       return page.imageUrl;
     }
 
-    // Descargar imagen y almacenar en caché
-    try {
-      const response = await fetch(page.imageUrl);
-      if (!response.ok) {
-        throw new Error(`Error al descargar imagen: ${response.status}`);
-      }
-      const blob = await response.blob();
-      const cachedUrl = imageCache.set(page.imageS3Key, blob);
-      return cachedUrl;
-    } catch (error) {
-      // Fallback: retornar imageUrl directamente si la descarga falla
-      console.error('Error al cargar imagen desde caché:', error);
-      return page.imageUrl;
-    }
+    return '';
   }, []);
 
   /**

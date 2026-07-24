@@ -231,7 +231,7 @@ El enfoque es bottom-up: primero utilidades de bajo nivel, luego servicios, lueg
     - Mostrar errores parciales si algún registro falla
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7_
 
-- [~] 11. Checkpoint - Verificar componentes UI
+- [x] 11. Checkpoint - Verificar componentes UI
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 12. Integración y wiring del flujo completo

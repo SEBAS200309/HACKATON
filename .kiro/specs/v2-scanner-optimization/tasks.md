@@ -188,15 +188,15 @@ El enfoque es bottom-up: primero utilidades de bajo nivel, luego servicios, lueg
     - Indicador de reintentos cuando aplica
     - _Requirements: 1.2, 1.4_
 
-- [ ] 10. Componentes UI del Espacio de Trabajo
-  - [ ] 10.1 Implementar `src/app/workspace/page.tsx`
+- [x] 10. Componentes UI del Espacio de Trabajo
+  - [x] 10.1 Implementar `src/app/workspace/page.tsx`
     - Página principal del workspace con layout de secciones: thumbnails, editor principal, panel de zonas/variables, panel de resultados
     - Sincronizar auth al montar (patrón estándar middleware)
     - Restaurar estado desde localStorage al montar si existe sesión previa
     - Requerir selección de plantilla si se accede directamente sin flujo previo
     - _Requirements: 5.1, 5.2, 5.5, 5.7_
 
-  - [ ] 10.2 Implementar `src/components/workspace/PageThumbnailList.tsx`
+  - [x] 10.2 Implementar `src/components/workspace/PageThumbnailList.tsx`
     - Lista scrollable vertical de thumbnails con número de página y miniatura
     - Selección de página activa (highlight visual)
     - Drag-and-drop para reordenar páginas
@@ -204,69 +204,69 @@ El enfoque es bottom-up: primero utilidades de bajo nivel, luego servicios, lueg
     - Botón de eliminar página con confirmación
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
 
-  - [ ] 10.3 Implementar `src/components/workspace/ZoneEditor.tsx`
+  - [x] 10.3 Implementar `src/components/workspace/ZoneEditor.tsx`
     - Canvas para definir zonas de escaneo (reutilizar lógica de CanvasOverlay)
     - Al dibujar zona, prompt de asignación de variable
     - Botón para propagar zonas a todas las páginas o solo la actual
     - Visualización de zonas existentes con color por variable
     - _Requirements: 7.1, 7.2, 7.3, 7.4_
 
-  - [ ] 10.4 Implementar `src/components/workspace/ZoneVariableAssigner.tsx`
+  - [x] 10.4 Implementar `src/components/workspace/ZoneVariableAssigner.tsx`
     - Modal/panel que muestra variables disponibles de la plantilla activa
     - Permitir asignar variable a zona seleccionada
     - Mostrar estado de asignación (asignada / sin asignar)
     - _Requirements: 7.2, 5.3_
 
-  - [ ] 10.5 Implementar `src/components/workspace/BatchResultsTable.tsx`
+  - [x] 10.5 Implementar `src/components/workspace/BatchResultsTable.tsx`
     - Tabla editable con columnas = variables, filas = páginas/registros
     - Celdas editables para corregir valores OCR extraídos
     - Indicador de estado por registro (pendiente, procesado, error)
     - Indicador de completitud (todas las variables llenas)
     - _Requirements: 7.5, 7.6, 7.7_
 
-  - [ ] 10.6 Implementar `src/components/workspace/BatchGeneratePanel.tsx`
+  - [x] 10.6 Implementar `src/components/workspace/BatchGeneratePanel.tsx`
     - Botón "Generar lote" habilitado solo cuando hay al menos 1 registro completo
     - Progreso durante generación: "Generando documento X de Y..."
     - Panel de descargas con links individuales + botón "Descargar todo" (ZIP)
     - Mostrar errores parciales si algún registro falla
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7_
 
-- [ ] 11. Checkpoint - Verificar componentes UI
+- [~] 11. Checkpoint - Verificar componentes UI
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 12. Integración y wiring del flujo completo
-  - [ ] 12.1 Integrar flujo de captura → perspectiva → filtro → workspace
+  - [~] 12.1 Integrar flujo de captura → perspectiva → filtro → workspace
     - Actualizar `src/app/digitize/page.tsx` para incorporar PerspectiveEditor y FilterSelector en el wizard
     - Al completar el flujo inicial, redirigir a /workspace con template y primera página
     - Pasar imagen procesada (corregida + filtrada) al workspace store
     - _Requirements: 5.1, 3.5, 4.6_
 
-  - [ ] 12.2 Integrar UploadManager con componentes de carga
+  - [~] 12.2 Integrar UploadManager con componentes de carga
     - Conectar `FileUpload` y `CameraCapture` existentes con el nuevo `UploadManager`
     - Agregar compresión inteligente antes del upload (si > 2MB)
     - Mostrar `UploadProgressBar` durante la carga
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.7_
 
-  - [ ] 12.3 Integrar caché de imágenes y OCR en el flujo del workspace
+  - [~] 12.3 Integrar caché de imágenes y OCR en el flujo del workspace
     - Usar `imageCache` al cargar imágenes de páginas en el workspace
     - Usar `ocrCache` para evitar re-procesamiento OCR cuando áreas no cambian
     - Re-filtrar localmente cuando el usuario modifica boundary de un área
     - _Requirements: 1.5, 1.6, 2.1, 2.2, 2.3, 2.4_
 
-  - [ ] 12.4 Integrar procesamiento OCR batch en workspace
+  - [~] 12.4 Integrar procesamiento OCR batch en workspace
     - Conectar botón "Procesar OCR" con la API route /api/ocr/process
     - Procesar todas las páginas secuencialmente, actualizar store con resultados
     - Mostrar skeleton UI durante procesamiento
     - Poblar tabla de resultados con datos extraídos
     - _Requirements: 2.3, 7.5, 7.6_
 
-  - [ ] 12.5 Integrar generación batch y descargas
+  - [~] 12.5 Integrar generación batch y descargas
     - Conectar `BatchGeneratePanel` con API route /api/documents/batch
     - Manejar descarga individual y ZIP
     - Mostrar progreso y errores parciales
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7_
 
-  - [ ] 12.6 Integrar gestión de sesión (guardar/restaurar/re-tomar)
+  - [~] 12.6 Integrar gestión de sesión (guardar/restaurar/re-tomar)
     - Conectar botones de sesión con API route /api/workspace/session
     - Implementar "Re-tomar foto" que reemplaza imagen preservando zonas
     - Implementar "Cargar configuración" desde configs guardadas
@@ -274,31 +274,31 @@ El enfoque es bottom-up: primero utilidades de bajo nivel, luego servicios, lueg
     - Implementar alerta de navegación para cambios sin guardar
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6_
 
-  - [ ] 12.7 Agregar link de navegación al workspace desde dashboard
+  - [~] 12.7 Agregar link de navegación al workspace desde dashboard
     - Agregar enlace visible a /workspace en la página de dashboard
     - Solo visible para usuarios autenticados
     - _Requirements: 5.6_
 
-  - [ ] 12.8 Configurar persistencia automática en localStorage
+  - [~] 12.8 Configurar persistencia automática en localStorage
     - Auto-guardar workspace state en localStorage periódicamente
     - Restaurar al montar /workspace si hay sesión guardada
     - _Requirements: 5.4, 5.5_
 
 - [ ] 13. Configuración de despliegue AWS Amplify
-  - [ ] 13.1 Documentar proceso de despliegue step-by-step
+  - [~] 13.1 Documentar proceso de despliegue step-by-step
     - Crear `docs/deployment-guide.md` con instrucciones completas
     - Incluir: conexión de repositorio, configuración de build, variables de entorno, dominio custom, verificación
     - Documentar configuración de CORS en S3 para dominio Amplify
     - Documentar configuración de Lambda (memory 1536MB, timeout 60s)
     - _Requirements: 11.2, 11.4, 11.5, 11.6, 11.8, 11.9_
 
-  - [ ] 13.2 Configurar inclusión de Tesseract WASM y traineddata en el build
+  - [~] 13.2 Configurar inclusión de Tesseract WASM y traineddata en el build
     - Asegurar que tesseract-core WASM binary se incluya en el deployment package
     - Configurar copia de spa.traineddata al directorio accesible en runtime
     - Implementar fallback de carga desde S3 con caché en /tmp para Lambda
     - _Requirements: 11.3, 12.2, 12.3, 12.8_
 
-- [ ] 14. Final checkpoint - Verificar integración completa
+- [~] 14. Final checkpoint - Verificar integración completa
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

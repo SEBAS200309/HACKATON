@@ -1,0 +1,17 @@
+{
+  "enabled": true,
+  "name": "Optimizador de Código",
+  "description": "Analiza el código al guardar usando técnicas de codebase-optimizer: detección de duplicados, análisis de rendimiento, scoring de salud, y recomendaciones priorizadas.",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "*.ts",
+      "*.tsx"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Analiza el archivo guardado como un codebase optimizer profesional. Ejecuta estas verificaciones en orden de prioridad:\n\n## 🔴 CRÍTICO (seguridad/errores)\n- Variables de entorno expuestas o hardcodeadas\n- Llamadas async sin manejo de errores\n- Memory leaks (event listeners sin cleanup, URLs sin revoke)\n\n## 🟡 RENDIMIENTO (cuellos de botella)\n- Operaciones O(n²) que pueden ser O(n) con Maps/Sets\n- Re-renders innecesarios en React (falta useMemo, useCallback en dependencias pesadas)\n- Cálculos repetidos dentro de loops o renders\n- Imports de módulos completos cuando solo se usa una función\n- Fetch calls redundantes que podrían cachearse\n\n## 🔵 DUPLICADOS (código redundante)\n- Patrones repetidos dentro del archivo que podrían extraerse a una función\n- Lógica que ya existe en otro archivo del proyecto (src/utils/, src/services/)\n- Constantes mágicas repetidas que deberían ser variables nombradas\n\n## 🟢 LIMPIEZA (calidad)\n- Imports no usados\n- Variables declaradas pero nunca leídas\n- Código muerto (condiciones imposibles, early returns que hacen unreachable)\n- Oportunidades de simplificación (ternarios anidados, if/else que puede ser early return)\n\n## Formato de respuesta:\nPor cada hallazgo mostrar:\n```\n[EMOJI PRIORIDAD] Descripción breve\nANTES: (solo la sección relevante, max 5 líneas)\nDESPUÉS: (versión optimizada)\nPOR QUÉ: (1 línea explicando la mejora)\n```\n\nSi el archivo está limpio: \"✅ Código optimizado. Sin sugerencias.\"\n\nIMPORTANTE:\n- Sé conciso. Max 3-4 sugerencias por archivo.\n- NO repitas todo el archivo.\n- Solo sugiere cambios que mantengan la MISMA lógica y funcionalidad.\n- Prioriza impacto real sobre estilo cosmético."
+  }
+}

@@ -11,14 +11,17 @@ import { useAppStore } from "@/store/useAppStore";
 import type { TemplateMetadata } from "@/types";
 
 export default function TemplatesPage() {
-  const {
-    wordTemplates,
-    xlsxTemplates,
-    loadTemplates,
-    loading,
-  } = useAppStore();
+  const wordTemplates = useAppStore((s) => s.wordTemplates);
+  const xlsxTemplates = useAppStore((s) => s.xlsxTemplates);
+  const loadTemplates = useAppStore((s) => s.loadTemplates);
+  const loading = useAppStore((s) => s.loading);
 
   const [initialLoaded, setInitialLoaded] = useState(false);
+
+  // Sincronizar auth: si el middleware nos dejó pasar, estamos autenticados
+  useEffect(() => {
+    useAppStore.setState({ isAuthenticated: true });
+  }, []);
 
   useEffect(() => {
     loadTemplates().then(() => setInitialLoaded(true));

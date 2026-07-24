@@ -33,6 +33,15 @@ export default function CameraCapture({ onCapture, onError }: CameraCaptureProps
           return;
         }
 
+        // Check if we're in a secure context (HTTPS or localhost)
+        if (!window.isSecureContext) {
+          onError(
+            "La cámara requiere una conexión segura (HTTPS). Puede cargar un documento escaneado manualmente"
+          );
+          setStarting(false);
+          return;
+        }
+
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: "environment" },
         });
@@ -49,9 +58,18 @@ export default function CameraCapture({ onCapture, onError }: CameraCaptureProps
           await videoRef.current.play();
           setIsReady(true);
         }
-      } catch {
+      } catch (err) {
         if (!cancelled) {
-          onError("No se detectó cámara. Puede cargar un documento escaneado manualmente");
+          const error = err as Error;
+          if (error.name === "NotAllowedError") {
+            onError(
+              "Permiso de cámara denegado. Habilite el acceso a la cámara en la configuración del navegador e intente nuevamente"
+            );
+          } else if (error.name === "NotFoundError") {
+            onError("No se detectó cámara. Puede cargar un documento escaneado manualmente");
+          } else {
+            onError("No se detectó cámara. Puede cargar un documento escaneado manualmente");
+          }
         }
       } finally {
         if (!cancelled) {
@@ -108,13 +126,14 @@ export default function CameraCapture({ onCapture, onError }: CameraCaptureProps
 
   return (
     <div className="flex flex-col items-center gap-4">
-      <div className="relative w-full overflow-hidden rounded-lg border-2 border-gray-700">
+      <div className="relative w-full overflow-hidden rounded-lg border-2 border-gray-700 bg-black min-h-[300px]">
         <video
           ref={videoRef}
           autoPlay
           playsInline
           muted
-          className="w-full h-auto"
+          className="w-full h-full object-cover min-h-[300px]"
+          style={{ display: "block" }}
           aria-label="Vista previa de cámara"
         />
         {/* Viewfinder overlay */}

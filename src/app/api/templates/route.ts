@@ -14,7 +14,7 @@ export async function GET(request: Request) {
 
     const templates = await templateService.listTemplates(type || undefined);
 
-    return NextResponse.json(templates);
+    return NextResponse.json({ templates });
   } catch {
     const errorResponse: ApiErrorResponse = {
       error: {

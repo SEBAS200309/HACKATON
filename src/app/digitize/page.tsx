@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useAppStore } from "@/store/useAppStore";
 import { DocumentCapture } from "@/components/digitization";
 import { AreaEditor } from "@/components/digitization";
@@ -178,10 +177,7 @@ function TemplateSelector({
 
 // ─── Main Digitize Page ───────────────────────────────────────────────────────
 export default function DigitizePage() {
-  const router = useRouter();
-
   // Store state
-  const isAuthenticated = useAppStore((s) => s.isAuthenticated);
   const currentStep = useAppStore((s) => s.currentStep);
   const setCurrentStep = useAppStore((s) => s.setCurrentStep);
   const wordTemplates = useAppStore((s) => s.wordTemplates);
@@ -211,19 +207,17 @@ export default function DigitizePage() {
   const [downloadFilename, setDownloadFilename] = useState("");
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
-  // Auth guard
+  // Sincronizar auth: si el middleware nos dejó pasar, estamos autenticados
   useEffect(() => {
-    if (!isAuthenticated) {
-      router.push("/login");
-    }
-  }, [isAuthenticated, router]);
+    useAppStore.setState({ isAuthenticated: true });
+  }, []);
 
   // Load templates on mount
   useEffect(() => {
-    if (isAuthenticated && wordTemplates.length === 0) {
+    if (wordTemplates.length === 0) {
       loadTemplates();
     }
-  }, [isAuthenticated, wordTemplates.length, loadTemplates]);
+  }, [wordTemplates.length, loadTemplates]);
 
   // Derive available variables from selected Word template
   const availableVariables: Variable[] = useMemo(() => {
@@ -379,11 +373,6 @@ export default function DigitizePage() {
     setDownloadFilename("");
     setDownloadError(null);
   }, [resetDigitization]);
-
-  // ─── Auth check ─────────────────────────────────────────────────────────────
-  if (!isAuthenticated) {
-    return null;
-  }
 
   // ─── Render ─────────────────────────────────────────────────────────────────
   return (

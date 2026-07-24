@@ -52,7 +52,7 @@ export async function POST(request: Request) {
 
     const results = await Promise.race([ocrPromise, timeoutPromise]);
 
-    return NextResponse.json(results, { status: 200 });
+    return NextResponse.json({ results }, { status: 200 });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
 

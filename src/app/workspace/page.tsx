@@ -113,13 +113,16 @@ export default function WorkspacePage() {
   }, [workspaceActive, persistToLocalStorage, pages.length]);
 
   // Cargar imágenes de páginas usando caché (Req 1.5, 1.6)
+  const loadedPageIdsRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     if (!workspaceActive || pages.length === 0) return;
 
     const loadImages = async () => {
       for (const page of pages) {
-        // Si ya tenemos la URL cacheada, saltar
-        if (cachedImageUrls[page.id]) continue;
+        // Si ya cargamos esta página, saltar
+        if (loadedPageIdsRef.current.has(page.id)) continue;
+        loadedPageIdsRef.current.add(page.id);
 
         try {
           const url = await loadPageImage(page);
@@ -132,7 +135,7 @@ export default function WorkspacePage() {
     };
 
     loadImages();
-  }, [workspaceActive, pages, loadPageImage, cachedImageUrls]);
+  }, [workspaceActive, pages, loadPageImage]);
 
   const handleInitWorkspace = () => {
     if (!selectedWordTemplate) return;

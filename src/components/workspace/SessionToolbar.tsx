@@ -110,9 +110,16 @@ export default function SessionToolbar({ onResetConfirmed }: SessionToolbarProps
         }
 
         const uploadData = await uploadResponse.json();
-        const localObjectUrl = URL.createObjectURL(file);
 
-        retakePage(currentPageId, uploadData.s3Key, localObjectUrl);
+        // Convertir a data URL (sobrevive localStorage y navegación)
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error("Error al leer archivo"));
+          reader.readAsDataURL(file);
+        });
+
+        retakePage(currentPageId, uploadData.s3Key, dataUrl);
         addToast({
           type: "success",
           message: "Foto actualizada. Los resultados OCR anteriores fueron eliminados.",

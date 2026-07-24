@@ -44,65 +44,81 @@ export default function PerspectiveEditor({
 
   // Load image and detect corners on mount
   useEffect(() => {
+    let cancelled = false;
     const img = new Image();
     const url = URL.createObjectURL(imageBlob);
 
     img.onload = () => {
-      imageRef.current = img;
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-
-      ctx.drawImage(img, 0, 0);
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-      // Attempt auto-detection
-      const detected = detectDocumentCorners(imageData);
-
-      if (detected && detected.length === 4) {
-        setCorners(detected as Corners);
-        setAutoDetected(true);
-        setFallbackMessage(null);
-      } else {
-        // Fallback: image corners with 5% margin
-        const w = canvas.width;
-        const h = canvas.height;
-        const mx = w * MARGIN_PERCENT;
-        const my = h * MARGIN_PERCENT;
-        const fallbackCorners: Corners = [
-          { x: mx, y: my }, // TL
-          { x: w - mx, y: my }, // TR
-          { x: w - mx, y: h - my }, // BR
-          { x: mx, y: h - my }, // BL
-        ];
-        setCorners(fallbackCorners);
-        setAutoDetected(false);
-        setFallbackMessage(
-          "No se detectaron bordes automáticamente. Ajuste los puntos manualmente."
-        );
+      if (cancelled) {
+        URL.revokeObjectURL(url);
+        return;
       }
 
+      imageRef.current = img;
+
+      // El canvas puede no existir aún si estamos en el render de loading.
+      // Guardamos la imagen en el ref y setLoading(false) para que el canvas se monte.
+      // Luego el segundo effect (drawOverlay) se encargará de dibujar.
       setLoading(false);
-      URL.revokeObjectURL(url);
     };
 
     img.onerror = () => {
+      if (cancelled) return;
       setLoading(false);
       setFallbackMessage("Error al cargar la imagen.");
-      URL.revokeObjectURL(url);
     };
 
     img.src = url;
 
     return () => {
+      cancelled = true;
       URL.revokeObjectURL(url);
     };
   }, [imageBlob]);
+
+  // Once loading is false and canvas is mounted, draw the image and detect corners
+  useEffect(() => {
+    if (loading || !imageRef.current) return;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const img = imageRef.current;
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.drawImage(img, 0, 0);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+    // Attempt auto-detection
+    const detected = detectDocumentCorners(imageData);
+
+    if (detected && detected.length === 4) {
+      setCorners(detected as Corners);
+      setAutoDetected(true);
+      setFallbackMessage(null);
+    } else {
+      // Fallback: image corners with 5% margin
+      const w = canvas.width;
+      const h = canvas.height;
+      const mx = w * MARGIN_PERCENT;
+      const my = h * MARGIN_PERCENT;
+      const fallbackCorners: Corners = [
+        { x: mx, y: my }, // TL
+        { x: w - mx, y: my }, // TR
+        { x: w - mx, y: h - my }, // BR
+        { x: mx, y: h - my }, // BL
+      ];
+      setCorners(fallbackCorners);
+      setAutoDetected(false);
+      setFallbackMessage(
+        "No se detectaron bordes automáticamente. Ajuste los puntos manualmente."
+      );
+    }
+  }, [loading]);
 
   // Draw overlay (corners + guide lines) whenever corners change
   useEffect(() => {

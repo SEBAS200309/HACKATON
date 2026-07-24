@@ -27,17 +27,20 @@ export function useWorkspaceCache() {
       }
     }
 
-    // Si la página tiene una URL blob válida, verificar que aún exista
+    // Si la página tiene una data URL (base64), usarla directamente — son persistentes
+    if (page.imageUrl && page.imageUrl.startsWith('data:')) {
+      return page.imageUrl;
+    }
+
+    // Si la página tiene una URL blob, verificar que aún sea válida
     if (page.imageUrl && page.imageUrl.startsWith('blob:')) {
       try {
-        // Intentar hacer HEAD request para verificar que el blob URL sigue vivo
         const response = await fetch(page.imageUrl, { method: 'HEAD' });
         if (response.ok) {
           return page.imageUrl;
         }
       } catch {
-        // Blob URL inválida (revocada o de sesión anterior)
-        // Intentar obtener la imagen desde S3 via presigned URL
+        // Blob URL inválida — continuar con fallback
       }
     }
 
@@ -62,8 +65,8 @@ export function useWorkspaceCache() {
       }
     }
 
-    // Si la imageUrl no es blob (URL directa), intentar usarla
-    if (page.imageUrl && !page.imageUrl.startsWith('blob:')) {
+    // Si la imageUrl es una URL HTTP directa, intentar usarla
+    if (page.imageUrl && (page.imageUrl.startsWith('http://') || page.imageUrl.startsWith('https://'))) {
       try {
         const response = await fetch(page.imageUrl);
         if (response.ok) {
@@ -79,12 +82,8 @@ export function useWorkspaceCache() {
       }
     }
 
-    // Si no hay s3Key pero sí imageUrl, retornar directamente (compatibilidad)
-    if (page.imageUrl) {
-      return page.imageUrl;
-    }
-
-    return '';
+    // Último recurso: retornar la URL que tengamos
+    return page.imageUrl || '';
   }, []);
 
   /**

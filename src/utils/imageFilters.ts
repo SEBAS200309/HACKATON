@@ -37,11 +37,8 @@ export function toGrayscale(imageData: ImageData): ImageData {
  * Mejora blancos estilo CamScanner: usa umbralización adaptativa para producir
  * un fondo blanco puro con texto negro nítido, simulando un escáner profesional.
  *
- * Algoritmo:
- * 1. Calcula un umbral local usando un promedio ponderado del vecindario
- * 2. Los pixels por encima del umbral se empujan a blanco puro (255)
- * 3. Los pixels por debajo se oscurecen agresivamente hacia negro
- * 4. Se aplica una curva sigmoide para hacer la transición más nítida
+ * Usa Integral Image (Summed Area Table) para calcular promedios locales en O(1)
+ * por pixel, haciendo el algoritmo completo O(N) en vez de O(N × blockSize²).
  *
  * Propiedades mantenidas para compatibilidad:
  * - Pixels claros (luminancia >= threshold): output >= input (empujados a blanco)
@@ -59,8 +56,9 @@ export function enhanceWhites(imageData: ImageData, threshold: number = 160): Im
   );
   const outputData = output.data;
 
-  // Paso 1: Calcular mapa de luminancia
   const totalPixels = width * height;
+
+  // Paso 1: Calcular mapa de luminancia
   const luminanceMap = new Float32Array(totalPixels);
   for (let i = 0; i < totalPixels; i++) {
     const idx = i * 4;
@@ -68,20 +66,17 @@ export function enhanceWhites(imageData: ImageData, threshold: number = 160): Im
   }
 
   // Para imágenes muy pequeñas (< 10 pixels), usar umbralización global simple
-  // Esto mantiene la compatibilidad con property tests de un solo pixel
   if (totalPixels < 10) {
     for (let i = 0; i < totalPixels; i++) {
       const idx = i * 4;
       const lum = luminanceMap[i];
 
       if (lum >= threshold) {
-        // Área clara: empujar a blanco
         const factor = 1 + ((lum - threshold) / (255 - threshold)) * 1.5;
         outputData[idx] = Math.min(255, Math.round(data[idx] * factor));
         outputData[idx + 1] = Math.min(255, Math.round(data[idx + 1] * factor));
         outputData[idx + 2] = Math.min(255, Math.round(data[idx + 2] * factor));
       } else {
-        // Área oscura (texto): oscurecer agresivamente
         const factor = Math.pow(lum / threshold, 1.5) * 0.6;
         outputData[idx] = Math.min(255, Math.round(data[idx] * factor));
         outputData[idx + 1] = Math.min(255, Math.round(data[idx + 1] * factor));
@@ -91,66 +86,66 @@ export function enhanceWhites(imageData: ImageData, threshold: number = 160): Im
     return output;
   }
 
-  // Paso 2: Calcular umbral adaptativo local usando promedio por bloques
-  const blockSize = Math.max(15, Math.round(Math.min(width, height) / 30));
-  const localThresholds = new Float32Array(totalPixels);
+  // Paso 2: Construir Integral Image (Summed Area Table) — O(N)
+  // integral[y][x] = sum of all luminance values from (0,0) to (x,y)
+  const integral = new Float64Array((width + 1) * (height + 1));
+  const iw = width + 1; // integral width stride
 
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      let sum = 0;
-      let count = 0;
-      const halfBlock = Math.floor(blockSize / 2);
-
-      // Muestreo rápido del vecindario
-      const step = Math.max(1, Math.floor(halfBlock / 4));
-      for (let dy = -halfBlock; dy <= halfBlock; dy += step) {
-        for (let dx = -halfBlock; dx <= halfBlock; dx += step) {
-          const nx = x + dx;
-          const ny = y + dy;
-          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-            sum += luminanceMap[ny * width + nx];
-            count++;
-          }
-        }
-      }
-
-      // Umbral local = promedio del vecindario menos offset
-      const localMean = sum / count;
-      localThresholds[y * width + x] = localMean - 25;
+  for (let y = 1; y <= height; y++) {
+    let rowSum = 0;
+    for (let x = 1; x <= width; x++) {
+      rowSum += luminanceMap[(y - 1) * width + (x - 1)];
+      integral[y * iw + x] = rowSum + integral[(y - 1) * iw + x];
     }
   }
 
-  // Paso 3: Aplicar umbralización adaptativa con curva sigmoide
-  const sharpness = 12;
+  // Paso 3: Calcular umbral adaptativo local usando integral image — O(1) por pixel
+  const halfBlock = Math.max(7, Math.round(Math.min(width, height) / 60));
 
   for (let i = 0; i < totalPixels; i++) {
     const idx = i * 4;
+    const y = Math.floor(i / width);
+    const x = i % width;
     const lum = luminanceMap[i];
-    const localThresh = Math.min(localThresholds[i], threshold);
 
-    // Para áreas muy claras (fondo): forzar blanco puro
+    // Definir ventana del vecindario (clamped a bordes)
+    const y1 = Math.max(0, y - halfBlock);
+    const y2 = Math.min(height - 1, y + halfBlock);
+    const x1 = Math.max(0, x - halfBlock);
+    const x2 = Math.min(width - 1, x + halfBlock);
+
+    // Calcular promedio local usando integral image en O(1)
+    const sum = integral[(y2 + 1) * iw + (x2 + 1)]
+              - integral[y1 * iw + (x2 + 1)]
+              - integral[(y2 + 1) * iw + x1]
+              + integral[y1 * iw + x1];
+    const count = (y2 - y1 + 1) * (x2 - x1 + 1);
+    const localMean = sum / count;
+
+    // Umbral adaptativo = promedio local - offset
+    const localThresh = Math.min(localMean - 25, threshold);
+
+    // Clasificar pixel y aplicar transformación
     if (lum > localThresh + 20) {
+      // Fondo claro → blanco puro
       outputData[idx] = 255;
       outputData[idx + 1] = 255;
       outputData[idx + 2] = 255;
-    }
-    // Para áreas muy oscuras (texto): forzar negro profundo
-    else if (lum < localThresh - 15) {
+    } else if (lum < localThresh - 15) {
+      // Texto oscuro → negro profundo
       const darkValue = Math.max(0, Math.round(lum * 0.3));
       outputData[idx] = darkValue;
       outputData[idx + 1] = darkValue;
       outputData[idx + 2] = darkValue;
-    }
-    // Zona de transición: usar sigmoide
-    else {
+    } else {
+      // Zona de transición → sigmoide suave
       const normalized = (lum - localThresh) / 30;
-      const sigmoid = 1 / (1 + Math.exp(-sharpness * normalized));
+      const sigmoid = 1 / (1 + Math.exp(-12 * normalized));
       const outputValue = Math.round(sigmoid * 255);
       outputData[idx] = outputValue;
       outputData[idx + 1] = outputValue;
       outputData[idx + 2] = outputValue;
     }
-    // Alpha sin cambios
   }
 
   return output;

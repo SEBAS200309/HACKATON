@@ -343,7 +343,14 @@ export default function DigitizePage() {
         }
 
         const result = await response.json();
-        const imageUrl = URL.createObjectURL(filteredBlob);
+
+        // Convertir blob a data URL (sobrevive navegación y localStorage, a diferencia de blob URLs)
+        const imageUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error("Error al convertir imagen"));
+          reader.readAsDataURL(filteredBlob);
+        });
 
         // Init workspace with selected templates
         initWorkspace(selectedWordTemplate, selectedXlsxTemplate);

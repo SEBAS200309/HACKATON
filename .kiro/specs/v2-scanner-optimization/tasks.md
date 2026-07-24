@@ -60,7 +60,7 @@ El enfoque es bottom-up: primero utilidades de bajo nivel, luego servicios, lueg
     - **Property 11: Filter composition equals sequential application**
     - **Validates: Requirements 4.2, 4.3, 4.4**
 
-- [-] 3. Módulo de upload y caché (client-side)
+- [x] 3. Módulo de upload y caché (client-side)
   - [x] 3.1 Implementar `src/utils/uploadManager.ts`
     - Crear clase `UploadManager` con cola de archivos y concurrencia máxima de 3
     - Implementar progreso en tiempo real vía XMLHttpRequest con `onprogress` (actualización cada 500ms)
@@ -68,7 +68,7 @@ El enfoque es bottom-up: primero utilidades de bajo nivel, luego servicios, lueg
     - Implementar retry con exponential backoff (2s, 4s, 8s) hasta 3 intentos
     - _Requirements: 1.2, 1.3, 1.4, 1.7_
 
-  - [ ] 3.2 Write property tests for upload manager
+  - [x] 3.2 Write property tests for upload manager
     - **Property 2: Upload concurrency never exceeds limit**
     - **Property 4: Upload retry with exponential backoff**
     - **Validates: Requirements 1.3, 1.7**
@@ -79,7 +79,7 @@ El enfoque es bottom-up: primero utilidades de bajo nivel, luego servicios, lueg
     - Exportar singleton `imageCache`
     - _Requirements: 1.5, 1.6_
 
-  - [ ] 3.4 Write property test for image cache
+  - [x] 3.4 Write property test for image cache
     - **Property 3: Image cache round-trip**
     - **Validates: Requirements 1.5, 1.6**
 
@@ -89,11 +89,11 @@ El enfoque es bottom-up: primero utilidades de bajo nivel, luego servicios, lueg
     - Exportar singleton `ocrCache`
     - _Requirements: 2.1_
 
-  - [ ] 3.6 Write property test for OCR cache
+  - [x] 3.6 Write property test for OCR cache
     - **Property 5: OCR cache returns identical results**
     - **Validates: Requirements 2.1**
 
-- [ ] 4. Checkpoint - Verificar utilidades base
+- [x] 4. Checkpoint - Verificar utilidades base
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 5. Servicio OCR con Tesseract.js (server-side)

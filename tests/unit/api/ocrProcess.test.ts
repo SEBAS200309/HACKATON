@@ -106,7 +106,7 @@ describe('POST /api/ocr/process', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data).toEqual(mockResults);
+      expect(data.results).toEqual(mockResults);
       expect(ocrService.processDocument).toHaveBeenCalledWith('sources/doc-123.pdf', areas);
     });
 

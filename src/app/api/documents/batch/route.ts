@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
-import { ZipArchive } from 'archiver';
+import JSZip from 'jszip';
 import { storageService } from '@/services/storageService';
 import { documentGenerationService } from '@/services/documentGenerationService';
 import type {
@@ -224,39 +224,26 @@ async function createZipBuffer(
   batchPrefix: string,
   xlsxBuffer: Buffer | null
 ): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const archive = new ZipArchive({ zlib: { level: 9 } });
-    const chunks: Buffer[] = [];
+  const zip = new JSZip();
 
-    archive.on('data', (chunk: Buffer) => chunks.push(chunk));
-    archive.on('end', () => resolve(Buffer.concat(chunks)));
-    archive.on('error', (err: Error) => reject(err));
+  // Agregar archivos DOCX al ZIP
+  for (const file of files) {
+    if (file.type === 'docx') {
+      const s3Key = `${batchPrefix}/${file.fileName}`;
+      const fileBuffer = await storageService.getObject(s3Key);
+      zip.file(file.fileName, fileBuffer);
+    }
+  }
 
-    // Agregar archivos al ZIP de forma asíncrona
-    const addFiles = async () => {
-      try {
-        for (const file of files) {
-          if (file.type === 'docx') {
-            const s3Key = `${batchPrefix}/${file.fileName}`;
-            const fileBuffer = await storageService.getObject(s3Key);
-            archive.append(fileBuffer, { name: file.fileName });
-          }
-        }
+  // Agregar XLSX si existe
+  if (xlsxBuffer) {
+    const xlsxFile = files.find((f) => f.type === 'xlsx');
+    if (xlsxFile) {
+      zip.file(xlsxFile.fileName, xlsxBuffer);
+    }
+  }
 
-        // Agregar XLSX si existe
-        if (xlsxBuffer) {
-          const xlsxFile = files.find((f) => f.type === 'xlsx');
-          if (xlsxFile) {
-            archive.append(xlsxBuffer, { name: xlsxFile.fileName });
-          }
-        }
-
-        await archive.finalize();
-      } catch (err) {
-        reject(err);
-      }
-    };
-
-    addFiles();
-  });
+  // Generar el ZIP como Buffer
+  const zipUint8Array = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 9 } });
+  return Buffer.from(zipUint8Array);
 }

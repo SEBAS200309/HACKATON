@@ -234,39 +234,39 @@ El enfoque es bottom-up: primero utilidades de bajo nivel, luego servicios, lueg
 - [x] 11. Checkpoint - Verificar componentes UI
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 12. Integración y wiring del flujo completo
-  - [~] 12.1 Integrar flujo de captura → perspectiva → filtro → workspace
+- [x] 12. Integración y wiring del flujo completo
+  - [x] 12.1 Integrar flujo de captura → perspectiva → filtro → workspace
     - Actualizar `src/app/digitize/page.tsx` para incorporar PerspectiveEditor y FilterSelector en el wizard
     - Al completar el flujo inicial, redirigir a /workspace con template y primera página
     - Pasar imagen procesada (corregida + filtrada) al workspace store
     - _Requirements: 5.1, 3.5, 4.6_
 
-  - [~] 12.2 Integrar UploadManager con componentes de carga
+  - [x] 12.2 Integrar UploadManager con componentes de carga
     - Conectar `FileUpload` y `CameraCapture` existentes con el nuevo `UploadManager`
     - Agregar compresión inteligente antes del upload (si > 2MB)
     - Mostrar `UploadProgressBar` durante la carga
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.7_
 
-  - [~] 12.3 Integrar caché de imágenes y OCR en el flujo del workspace
+  - [x] 12.3 Integrar caché de imágenes y OCR en el flujo del workspace
     - Usar `imageCache` al cargar imágenes de páginas en el workspace
     - Usar `ocrCache` para evitar re-procesamiento OCR cuando áreas no cambian
     - Re-filtrar localmente cuando el usuario modifica boundary de un área
     - _Requirements: 1.5, 1.6, 2.1, 2.2, 2.3, 2.4_
 
-  - [~] 12.4 Integrar procesamiento OCR batch en workspace
+  - [x] 12.4 Integrar procesamiento OCR batch en workspace
     - Conectar botón "Procesar OCR" con la API route /api/ocr/process
     - Procesar todas las páginas secuencialmente, actualizar store con resultados
     - Mostrar skeleton UI durante procesamiento
     - Poblar tabla de resultados con datos extraídos
     - _Requirements: 2.3, 7.5, 7.6_
 
-  - [~] 12.5 Integrar generación batch y descargas
+  - [x] 12.5 Integrar generación batch y descargas
     - Conectar `BatchGeneratePanel` con API route /api/documents/batch
     - Manejar descarga individual y ZIP
     - Mostrar progreso y errores parciales
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7_
 
-  - [~] 12.6 Integrar gestión de sesión (guardar/restaurar/re-tomar)
+  - [x] 12.6 Integrar gestión de sesión (guardar/restaurar/re-tomar)
     - Conectar botones de sesión con API route /api/workspace/session
     - Implementar "Re-tomar foto" que reemplaza imagen preservando zonas
     - Implementar "Cargar configuración" desde configs guardadas
@@ -274,12 +274,12 @@ El enfoque es bottom-up: primero utilidades de bajo nivel, luego servicios, lueg
     - Implementar alerta de navegación para cambios sin guardar
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6_
 
-  - [~] 12.7 Agregar link de navegación al workspace desde dashboard
+  - [x] 12.7 Agregar link de navegación al workspace desde dashboard
     - Agregar enlace visible a /workspace en la página de dashboard
     - Solo visible para usuarios autenticados
     - _Requirements: 5.6_
 
-  - [~] 12.8 Configurar persistencia automática en localStorage
+  - [x] 12.8 Configurar persistencia automática en localStorage
     - Auto-guardar workspace state en localStorage periódicamente
     - Restaurar al montar /workspace si hay sesión guardada
     - _Requirements: 5.4, 5.5_

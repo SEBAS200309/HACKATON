@@ -59,7 +59,7 @@ interface AppState {
   setPageOcrResults: (pageId: string, results: OcrResult[]) => void;
   retakePage: (pageId: string, newImageS3Key: string, newImageUrl: string) => void;
   resetWorkspace: () => void;
-  persistToLocalStorage: () => void;
+  persistToLocalStorage: () => boolean;
   restoreFromLocalStorage: () => boolean;
 
   // UI slice
@@ -478,7 +478,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
     });
   },
 
-  persistToLocalStorage: () => {
+  persistToLocalStorage: (): boolean => {
     const state = get();
     try {
       const data = {
@@ -491,8 +491,9 @@ export const useAppStore = create<AppState>()((set, get) => ({
         generatedFiles: state.generatedFiles,
       };
       localStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(data));
+      return true;
     } catch {
-      // Silently fail — localStorage might be full or unavailable
+      return false;
     }
   },
 

@@ -1,10 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import { useAppStore } from "@/store/useAppStore";
+import { useWorkspaceCache } from "@/hooks/useWorkspaceCache";
 import Button from "@/components/ui/Button";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
-import type { TemplateMetadata } from "@/types";
+import BatchGeneratePanel from "@/components/workspace/BatchGeneratePanel";
+import OcrProcessingPanel from "@/components/workspace/OcrProcessingPanel";
+import BatchResultsTable from "@/components/workspace/BatchResultsTable";
+import SessionToolbar from "@/components/workspace/SessionToolbar";
+import type { GeneratedFile, TemplateMetadata } from "@/types";
 
 export default function WorkspacePage() {
   const [initializing, setInitializing] = useState(true);
@@ -14,6 +19,7 @@ export default function WorkspacePage() {
 
   const workspaceActive = useAppStore((s) => s.workspaceActive);
   const activeTemplate = useAppStore((s) => s.activeTemplate);
+  const activeXlsxTemplate = useAppStore((s) => s.activeXlsxTemplate);
   const pages = useAppStore((s) => s.pages);
   const currentPageId = useAppStore((s) => s.currentPageId);
   const availableVariables = useAppStore((s) => s.availableVariables);
@@ -24,7 +30,14 @@ export default function WorkspacePage() {
   const initWorkspace = useAppStore((s) => s.initWorkspace);
   const resetWorkspace = useAppStore((s) => s.resetWorkspace);
   const restoreFromLocalStorage = useAppStore((s) => s.restoreFromLocalStorage);
+  const persistToLocalStorage = useAppStore((s) => s.persistToLocalStorage);
+  const addToast = useAppStore((s) => s.addToast);
   const loadTemplates = useAppStore((s) => s.loadTemplates);
+  const updateRecord = useAppStore((s) => s.updateRecord);
+
+  // Integración de caché de imágenes y OCR para el workspace
+  const { loadPageImage, getCachedOcrResults, setCachedOcrResults, refilterLocally } = useWorkspaceCache();
+  const [cachedImageUrls, setCachedImageUrls] = useState<Record<string, string>>({});
 
   // Sync auth on mount (middleware handles real auth)
   useEffect(() => {
@@ -47,6 +60,79 @@ export default function WorkspacePage() {
       loadTemplates().finally(() => setLoadingTemplates(false));
     }
   }, [initializing, workspaceActive, loadTemplates]);
+
+  // Auto-save workspace state to localStorage every 30 seconds
+  const autoSaveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const handlePersist = useCallback(() => {
+    const success = persistToLocalStorage();
+    if (!success) {
+      addToast({
+        type: 'warning',
+        message: 'No se pudo guardar el estado. Los datos se perderán al cerrar.',
+      });
+    }
+  }, [persistToLocalStorage, addToast]);
+
+  useEffect(() => {
+    if (!workspaceActive) {
+      if (autoSaveIntervalRef.current) {
+        clearInterval(autoSaveIntervalRef.current);
+        autoSaveIntervalRef.current = null;
+      }
+      return;
+    }
+
+    autoSaveIntervalRef.current = setInterval(handlePersist, 30_000);
+
+    return () => {
+      if (autoSaveIntervalRef.current) {
+        clearInterval(autoSaveIntervalRef.current);
+        autoSaveIntervalRef.current = null;
+      }
+    };
+  }, [workspaceActive, handlePersist]);
+
+  // Save workspace state before page unload + warn about unsaved changes
+  useEffect(() => {
+    if (!workspaceActive) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      persistToLocalStorage();
+      // Trigger browser's native "unsaved changes" confirmation
+      if (pages.length > 0) {
+        e.preventDefault();
+        e.returnValue = "Tiene cambios sin guardar. ¿Está seguro que desea salir?";
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [workspaceActive, persistToLocalStorage, pages.length]);
+
+  // Cargar imágenes de páginas usando caché (Req 1.5, 1.6)
+  useEffect(() => {
+    if (!workspaceActive || pages.length === 0) return;
+
+    const loadImages = async () => {
+      for (const page of pages) {
+        // Si ya tenemos la URL cacheada, saltar
+        if (cachedImageUrls[page.id]) continue;
+
+        try {
+          const url = await loadPageImage(page);
+          setCachedImageUrls((prev) => ({ ...prev, [page.id]: url }));
+        } catch {
+          // Fallback silencioso — usar imageUrl directa
+          setCachedImageUrls((prev) => ({ ...prev, [page.id]: page.imageUrl }));
+        }
+      }
+    };
+
+    loadImages();
+  }, [workspaceActive, pages, loadPageImage, cachedImageUrls]);
 
   const handleInitWorkspace = () => {
     if (!selectedWordTemplate) return;
@@ -180,6 +266,10 @@ export default function WorkspacePage() {
 
   // Active workspace layout
   const currentPage = pages.find((p) => p.id === currentPageId) ?? null;
+  // URL de imagen cacheada para la página actual (Req 1.5, 1.6)
+  const currentPageImageUrl = currentPage
+    ? cachedImageUrls[currentPage.id] ?? currentPage.imageUrl
+    : null;
 
   return (
     <main className="min-h-screen flex flex-col bg-[#0f0a1a]">
@@ -194,9 +284,7 @@ export default function WorkspacePage() {
               Plantilla: {activeTemplate.fileName}
             </span>
           )}
-          <Button variant="secondary" size="sm" onClick={resetWorkspace}>
-            Nueva sesión
-          </Button>
+          <SessionToolbar onResetConfirmed={resetWorkspace} />
         </div>
       </header>
 
@@ -256,13 +344,18 @@ export default function WorkspacePage() {
           <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
             {/* ZoneEditor component will be integrated here */}
             {currentPage ? (
-              <div className="w-full h-full flex items-center justify-center rounded-xl border border-dashed border-purple-500/30 bg-[#1a1025]/30">
-                <div className="text-center">
-                  <p className="text-sm text-[#a1a1aa]">
-                    Editor de zonas — Página {currentPage.pageNumber}
-                  </p>
-                  <p className="text-xs text-[#a1a1aa] mt-1">
-                    {currentPage.zones.length} zona{currentPage.zones.length !== 1 ? "s" : ""} definida{currentPage.zones.length !== 1 ? "s" : ""}
+              <div className="w-full h-full flex items-center justify-center rounded-xl border border-dashed border-purple-500/30 bg-[#1a1025]/30 relative overflow-hidden">
+                {/* Mostrar imagen de la página usando URL cacheada (Req 1.5, 1.6) */}
+                {currentPageImageUrl && (
+                  <img
+                    src={currentPageImageUrl}
+                    alt={`Página ${currentPage.pageNumber}`}
+                    className="max-w-full max-h-full object-contain"
+                  />
+                )}
+                <div className="absolute bottom-3 left-3 bg-[#0f0a1a]/80 rounded px-2 py-1">
+                  <p className="text-xs text-[#a1a1aa]">
+                    Página {currentPage.pageNumber} — {currentPage.zones.length} zona{currentPage.zones.length !== 1 ? "s" : ""} definida{currentPage.zones.length !== 1 ? "s" : ""}
                   </p>
                 </div>
               </div>
@@ -332,7 +425,44 @@ export default function WorkspacePage() {
               <h2 className="text-xs font-semibold text-[#a1a1aa] uppercase tracking-wide mb-2">
                 Resultados
               </h2>
-              {/* BatchResultsTable + BatchGeneratePanel components will be integrated here */}
+
+              {/* OCR Processing Panel */}
+              <div className="mb-3">
+                <OcrProcessingPanel />
+              </div>
+
+              {/* Batch Results Table — show when pages have OCR results */}
+              {pages.some((p) => p.ocrProcessed) && (
+                <div className="mb-3">
+                  <BatchResultsTable
+                    pages={pages.filter((p) => p.ocrProcessed)}
+                    variables={availableVariables.filter((v) => v.assigned)}
+                    onUpdateRecord={updateRecord}
+                  />
+                </div>
+              )}
+
+              {/* BatchGeneratePanel — handles API call, progress, and downloads */}
+              {pages.length > 0 && (
+                <div className="mb-3">
+                  <BatchGeneratePanel
+                    pages={pages}
+                    templateId={activeTemplate?.id ?? ""}
+                    xlsxTemplateId={activeXlsxTemplate?.id}
+                    assignedVariables={availableVariables
+                      .filter((v) => v.assigned)
+                      .map((v) => v.name)}
+                    onBatchComplete={(files: GeneratedFile[]) => {
+                      useAppStore.setState({ generatedFiles: files });
+                    }}
+                    onProgressUpdate={(progress) => {
+                      useAppStore.setState({ batchProgress: progress });
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* Generated files list */}
               {generatedFiles.length === 0 ? (
                 <p className="text-xs text-[#a1a1aa]">
                   No hay archivos generados aún.

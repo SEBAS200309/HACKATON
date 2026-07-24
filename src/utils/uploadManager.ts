@@ -11,6 +11,8 @@ export interface UploadOptions {
   maxConcurrent: number;  // default: 3
   maxRetries: number;     // default: 3
   onProgress: (progress: UploadProgress[]) => void;
+  onFileComplete?: (fileId: string, response: unknown) => void;
+  onFileFailed?: (fileId: string, error: string) => void;
 }
 
 interface QueueItem {
@@ -153,6 +155,7 @@ export class UploadManager {
     const formData = new FormData();
     formData.append('file', item.file);
     formData.append('type', item.type);
+    formData.append('fileName', item.file.name);
 
     // Tracking de progreso con throttle de 500ms
     xhr.upload.onprogress = (event: ProgressEvent) => {
@@ -170,6 +173,17 @@ export class UploadManager {
         item.progress = 100;
         this.activeCount = Math.max(0, this.activeCount - 1);
         this.notifyProgress();
+
+        // Notify file completion with parsed response
+        if (this.options.onFileComplete) {
+          try {
+            const response = JSON.parse(xhr.responseText);
+            this.options.onFileComplete(item.fileId, response);
+          } catch {
+            this.options.onFileComplete(item.fileId, null);
+          }
+        }
+
         this.processQueue();
       } else {
         this.handleUploadError(item, `Error del servidor: ${xhr.status}`);
@@ -229,6 +243,12 @@ export class UploadManager {
       item.status = 'failed';
       item.error = 'Error al cargar el archivo. Verifique su conexión e intente nuevamente';
       this.notifyProgress();
+
+      // Notify file failure
+      if (this.options.onFileFailed) {
+        this.options.onFileFailed(item.fileId, item.error);
+      }
+
       this.processQueue();
     }
   }

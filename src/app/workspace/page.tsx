@@ -9,7 +9,8 @@ import BatchGeneratePanel from "@/components/workspace/BatchGeneratePanel";
 import OcrProcessingPanel from "@/components/workspace/OcrProcessingPanel";
 import BatchResultsTable from "@/components/workspace/BatchResultsTable";
 import SessionToolbar from "@/components/workspace/SessionToolbar";
-import type { GeneratedFile, TemplateMetadata } from "@/types";
+import ZoneEditor from "@/components/workspace/ZoneEditor";
+import type { GeneratedFile, TemplateMetadata, WorkspaceZone } from "@/types";
 
 export default function WorkspacePage() {
   const [initializing, setInitializing] = useState(true);
@@ -34,6 +35,9 @@ export default function WorkspacePage() {
   const addToast = useAppStore((s) => s.addToast);
   const loadTemplates = useAppStore((s) => s.loadTemplates);
   const updateRecord = useAppStore((s) => s.updateRecord);
+  const addZone = useAppStore((s) => s.addZone);
+  const removeZone = useAppStore((s) => s.removeZone);
+  const propagateZones = useAppStore((s) => s.propagateZones);
 
   // Integración de caché de imágenes y OCR para el workspace
   const { loadPageImage, getCachedOcrResults, setCachedOcrResults, refilterLocally } = useWorkspaceCache();
@@ -44,8 +48,16 @@ export default function WorkspacePage() {
     useAppStore.setState({ isAuthenticated: true });
   }, []);
 
-  // Restore workspace state from localStorage on mount
+  // Restore workspace state from localStorage on mount — only if not already active
+  // (if coming from /digitize flow, the workspace is already initialized in-memory)
   useEffect(() => {
+    const currentState = useAppStore.getState();
+    if (currentState.workspaceActive && currentState.pages.length > 0) {
+      // Workspace was already initialized by the digitize flow — don't overwrite
+      setInitializing(false);
+      return;
+    }
+
     const restored = restoreFromLocalStorage();
     if (!restored) {
       // No previous session — will show template selection
@@ -344,26 +356,28 @@ export default function WorkspacePage() {
 
         {/* Center — Main editor area */}
         <section className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
-            {/* ZoneEditor component will be integrated here */}
-            {currentPage ? (
-              <div className="w-full h-full flex items-center justify-center rounded-xl border border-dashed border-purple-500/30 bg-[#1a1025]/30 relative overflow-hidden">
-                {/* Mostrar imagen de la página usando URL cacheada (Req 1.5, 1.6) */}
-                {currentPageImageUrl && (
-                  <img
-                    src={currentPageImageUrl}
-                    alt={`Página ${currentPage.pageNumber}`}
-                    className="max-w-full max-h-full object-contain"
-                  />
-                )}
-                <div className="absolute bottom-3 left-3 bg-[#0f0a1a]/80 rounded px-2 py-1">
-                  <p className="text-xs text-[#a1a1aa]">
-                    Página {currentPage.pageNumber} — {currentPage.zones.length} zona{currentPage.zones.length !== 1 ? "s" : ""} definida{currentPage.zones.length !== 1 ? "s" : ""}
-                  </p>
-                </div>
-              </div>
+          <div className="flex-1 p-4 overflow-auto">
+            {currentPage && currentPageImageUrl ? (
+              <ZoneEditor
+                imageUrl={currentPageImageUrl}
+                zones={currentPage.zones}
+                availableVariables={availableVariables}
+                onZoneCreated={(zone: WorkspaceZone) => addZone(currentPage.id, zone)}
+                onZoneUpdated={(zoneId: string, updates: Partial<WorkspaceZone>) => {
+                  // Update zone in store by replacing the zones array
+                  useAppStore.setState((state) => ({
+                    pages: state.pages.map((p) =>
+                      p.id === currentPage.id
+                        ? { ...p, zones: p.zones.map((z) => z.id === zoneId ? { ...z, ...updates } : z) }
+                        : p
+                    ),
+                  }));
+                }}
+                onZoneDeleted={(zoneId: string) => removeZone(currentPage.id, zoneId)}
+                onPropagateZones={(toAll: boolean) => propagateZones(currentPage.id, toAll)}
+              />
             ) : (
-              <div className="text-center">
+              <div className="h-full flex items-center justify-center">
                 <p className="text-sm text-[#a1a1aa]">
                   Capture o cargue una página para comenzar a definir zonas.
                 </p>

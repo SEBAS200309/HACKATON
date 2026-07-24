@@ -301,6 +301,12 @@ export default function PerspectiveEditor({
 
   // Reject: go back to adjustment view (preserving corners)
   const handleReject = useCallback(() => {
+    // Restaurar dimensiones del canvas antes de cambiar de vista
+    if (imageRef.current && canvasRef.current) {
+      const canvas = canvasRef.current;
+      canvas.width = imageRef.current.naturalWidth;
+      canvas.height = imageRef.current.naturalHeight;
+    }
     setView("adjust");
     setCorrectedCanvas(null);
     setCorrectedBlob(null);
@@ -366,36 +372,19 @@ export default function PerspectiveEditor({
         </>
       )}
 
-      {/* Preview view: side by side comparison */}
+      {/* Preview view: only show corrected result */}
       {view === "preview" && correctedCanvas && (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Original */}
-            <div className="flex flex-col items-center gap-2">
-              <span className="text-xs text-[#a1a1aa] uppercase tracking-wide">
-                Original
-              </span>
-              <div className="rounded-lg border border-gray-700 overflow-hidden bg-black">
-                <canvas
-                  ref={canvasRef}
-                  className="w-full h-auto"
-                  aria-label="Imagen original"
-                />
-              </div>
-            </div>
-
-            {/* Corrected */}
-            <div className="flex flex-col items-center gap-2">
-              <span className="text-xs text-[#a1a1aa] uppercase tracking-wide">
-                Corregida
-              </span>
-              <div className="rounded-lg border border-[#a855f7]/50 overflow-hidden bg-black">
-                <img
-                  src={correctedCanvas.toDataURL()}
-                  alt="Imagen con perspectiva corregida"
-                  className="w-full h-auto"
-                />
-              </div>
+          <div className="flex flex-col items-center gap-2">
+            <span className="text-xs text-[#a1a1aa] uppercase tracking-wide">
+              Resultado de la corrección
+            </span>
+            <div className="w-full rounded-lg border border-[#a855f7]/50 overflow-hidden bg-black">
+              <img
+                src={correctedCanvas.toDataURL()}
+                alt="Imagen con perspectiva corregida"
+                className="w-full h-auto"
+              />
             </div>
           </div>
 

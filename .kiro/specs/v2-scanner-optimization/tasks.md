@@ -96,8 +96,8 @@ El enfoque es bottom-up: primero utilidades de bajo nivel, luego servicios, lueg
 - [x] 4. Checkpoint - Verificar utilidades base
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 5. Servicio OCR con Tesseract.js (server-side)
-  - [ ] 5.1 Implementar `src/services/tesseractOcrService.ts`
+- [x] 5. Servicio OCR con Tesseract.js (server-side)
+  - [x] 5.1 Implementar `src/services/tesseractOcrService.ts`
     - Crear clase `TesseractOcrService` que implementa la interfaz `OcrService`
     - Implementar `initialize()` con worker Tesseract.js en modo Node.js, carga de WASM y spa.traineddata
     - Implementar reutilización de worker entre invocaciones warm (patrón singleton con lazy init)
@@ -110,7 +110,7 @@ El enfoque es bottom-up: primero utilidades de bajo nivel, luego servicios, lueg
     - Manejar archivos > 5MB con referencia S3 en vez de bytes directos
     - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 12.1, 12.2, 12.3, 12.4, 12.5, 12.6, 12.7, 12.8, 12.9_
 
-  - [ ]* 5.2 Write property tests for Tesseract OCR service
+  - [x] 5.2 Write property tests for Tesseract OCR service
     - **Property 6: BoundingBox area filtering correctness**
     - **Property 7: Large file transmission threshold**
     - **Property 19: Tesseract output BoundingBox normalization**
@@ -118,14 +118,14 @@ El enfoque es bottom-up: primero utilidades de bajo nivel, luego servicios, lueg
     - **Property 21: Worker reuse across warm invocations**
     - **Validates: Requirements 2.2, 2.4, 2.5, 10.2, 10.3, 10.4, 10.6, 12.4**
 
-  - [ ] 5.3 Actualizar API route `src/app/api/ocr/process/route.ts`
+  - [x] 5.3 Actualizar API route `src/app/api/ocr/process/route.ts`
     - Reemplazar import de TextractOcrService por TesseractOcrService
     - Mantener contrato de respuesta `{ results: OcrResult[] }` sin cambios
     - Mantener manejo de errores existente con códigos OCR_FAILED, OCR_TIMEOUT
     - _Requirements: 10.8, 12.7_
 
-- [ ] 6. Workspace Store y persistencia
-  - [ ] 6.1 Extender `src/store/useAppStore.ts` con slice de Workspace
+- [x] 6. Workspace Store y persistencia
+  - [x] 6.1 Extender `src/store/useAppStore.ts` con slice de Workspace
     - Agregar estado: workspaceActive, activeTemplate, activeXlsxTemplate, pages, currentPageId, availableVariables, batchProgress, generatedFiles
     - Implementar actions: initWorkspace, addPage, removePage, reorderPages, setCurrentPage
     - Implementar actions: addZone, removeZone, propagateZones, updateRecord, setPageOcrResults
@@ -133,18 +133,18 @@ El enfoque es bottom-up: primero utilidades de bajo nivel, luego servicios, lueg
     - Asegurar numeración secuencial de páginas en todas las operaciones (add, remove, reorder)
     - _Requirements: 5.1, 5.4, 5.5, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 7.3, 7.4, 9.1, 9.2, 9.4_
 
-  - [ ]* 6.2 Write property tests for workspace state
+  - [x] 6.2 Write property tests for workspace state
     - **Property 12: Workspace state persistence round-trip**
     - **Property 13: Page list maintains sequential numbering**
     - **Property 14: Zone propagation preserves positions**
     - **Property 18: Photo retake preserves zone definitions**
     - **Validates: Requirements 5.4, 5.5, 6.5, 6.6, 6.7, 7.3, 9.1**
 
-- [ ] 7. Checkpoint - Verificar servicios y store
+- [x] 7. Checkpoint - Verificar servicios y store
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 8. API Routes nuevas (batch y session)
-  - [ ] 8.1 Implementar `src/app/api/documents/batch/route.ts`
+- [x] 8. API Routes nuevas (batch y session)
+  - [x] 8.1 Implementar `src/app/api/documents/batch/route.ts`
     - POST handler que recibe BatchGenerateRequest (templateId, xlsxTemplateId?, records[])
     - Generar un .docx por record usando documentGenerationService
     - Si hay xlsxTemplateId, generar XLSX con todos los records como filas
@@ -153,20 +153,20 @@ El enfoque es bottom-up: primero utilidades de bajo nivel, luego servicios, lueg
     - Manejar errores parciales: saltar records fallidos, reportar en response.errors
     - _Requirements: 8.1, 8.2, 8.3, 8.5, 8.6, 8.7, 8.8_
 
-  - [ ]* 8.2 Write property tests for batch generation
+  - [x] 8.2 Write property tests for batch generation
     - **Property 15: OCR produces exactly one record per page**
     - **Property 16: Batch generation output count matches records**
     - **Property 17: Batch generation resilience**
     - **Validates: Requirements 7.5, 8.2, 8.3, 8.6, 8.8**
 
-  - [ ] 8.3 Implementar `src/app/api/workspace/session/route.ts`
+  - [x] 8.3 Implementar `src/app/api/workspace/session/route.ts`
     - POST handler para guardar sesión en S3 (sessions/{sessionId}.json)
     - GET handler para restaurar sesión por sessionId
     - Retornar contratos definidos en diseño: `{ success: true, sessionId }` y `{ session: {...} }`
     - _Requirements: 9.6_
 
-- [ ] 9. Componentes UI de procesamiento de imagen
-  - [ ] 9.1 Implementar `src/components/digitization/PerspectiveEditor.tsx`
+- [x] 9. Componentes UI de procesamiento de imagen
+  - [x] 9.1 Implementar `src/components/digitization/PerspectiveEditor.tsx`
     - Mostrar imagen con 4 puntos arrastrables (corners) sobre Canvas
     - Detectar bordes automáticamente al montar; fallback a esquinas de imagen con mensaje
     - Mostrar líneas guía conectando los 4 puntos en tiempo real
@@ -174,14 +174,14 @@ El enfoque es bottom-up: primero utilidades de bajo nivel, luego servicios, lueg
     - Botones "Aceptar" / "Rechazar" para confirmar o volver a ajustar
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8_
 
-  - [ ] 9.2 Implementar `src/components/digitization/FilterSelector.tsx`
+  - [x] 9.2 Implementar `src/components/digitization/FilterSelector.tsx`
     - Mostrar 4 opciones de filtro con preview en miniatura del resultado
     - Preview en tiempo real (< 1 segundo) al seleccionar filtro
     - Botón "Confirmar" que almacena imagen filtrada como documento activo
     - Manejo de error de memoria con mensaje al usuario
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8_
 
-  - [ ] 9.3 Implementar `src/components/ui/UploadProgressBar.tsx`
+  - [x] 9.3 Implementar `src/components/ui/UploadProgressBar.tsx`
     - Barra de progreso con porcentaje en tiempo real
     - Estado visual por archivo: pending, uploading, completed, failed, cancelled
     - Botón de cancelación individual por archivo

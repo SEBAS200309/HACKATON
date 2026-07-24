@@ -12,3 +12,7 @@ export type { ModalProps } from "./Modal";
 
 export { default as Input } from "./Input";
 export type { InputProps } from "./Input";
+
+export { default as UploadProgressBar } from "./UploadProgressBar";
+export { UploadProgressBar as UploadProgressBarNamed } from "./UploadProgressBar";
+export type { UploadProgressBarProps } from "./UploadProgressBar";

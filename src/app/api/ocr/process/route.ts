@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { ocrService } from '@/services/ocrService';
+import { ocrService } from '@/services/tesseractOcrService';
 import type { ApiErrorResponse, AreaOfInterest } from '@/types';
 
 const OCR_TIMEOUT_MS = 60_000; // 60 segundos

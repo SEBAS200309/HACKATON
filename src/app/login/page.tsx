@@ -1,11 +1,9 @@
 "use client";
 
 import { useState, FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import { useAppStore } from "@/store/useAppStore";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -25,7 +23,8 @@ export default function LoginPage() {
       if (response.ok) {
         // Update Zustand store so client-side auth guards work
         useAppStore.setState({ isAuthenticated: true });
-        router.push("/dashboard");
+        // Full navigation to ensure cookie is sent with the request
+        window.location.href = "/dashboard";
       } else {
         const data = await response.json();
         setError(data.error?.message || "Contraseña incorrecta");

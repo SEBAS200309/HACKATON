@@ -9,7 +9,7 @@ import type { TextractBlock, AreaOfInterest, OcrResult } from '@/types';
 
 export interface OcrService {
   processDocument(documentKey: string, areas: AreaOfInterest[]): Promise<OcrResult[]>;
-  detectText(imageBytes: Buffer): Promise<TextractBlock[]>;
+  detectText(imageBytes: Buffer, s3Key?: string): Promise<TextractBlock[]>;
   filterBlocksByArea(blocks: TextractBlock[], area: AreaOfInterest): TextractBlock[];
   calculateAreaConfidence(blocks: TextractBlock[]): number;
 }
@@ -28,16 +28,33 @@ class TextractOcrService implements OcrService {
   }
 
   /**
-   * Envía la imagen completa a Textract DetectDocumentText y retorna
-   * todos los bloques (PAGE, LINE, WORD) con BoundingBox normalizado (0–1).
+   * Envía la imagen a Textract DetectDocumentText.
+   * Si la imagen supera 5MB, la referencia desde S3. De lo contrario envía bytes directos.
    */
-  async detectText(imageBytes: Buffer): Promise<TextractBlock[]> {
+  async detectText(imageBytes: Buffer, s3Key?: string): Promise<TextractBlock[]> {
     try {
-      const command = new DetectDocumentTextCommand({
-        Document: {
-          Bytes: imageBytes,
-        },
-      });
+      const MAX_BYTES_SIZE = 5 * 1024 * 1024; // 5MB limit for Document.Bytes
+
+      let command: DetectDocumentTextCommand;
+
+      if (imageBytes.length > MAX_BYTES_SIZE && s3Key) {
+        // Use S3 reference for large files
+        command = new DetectDocumentTextCommand({
+          Document: {
+            S3Object: {
+              Bucket: process.env.S3_BUCKET_NAME || '',
+              Name: s3Key,
+            },
+          },
+        });
+      } else {
+        // Send bytes directly for smaller files
+        command = new DetectDocumentTextCommand({
+          Document: {
+            Bytes: imageBytes,
+          },
+        });
+      }
 
       const response = await this.client.send(command);
 
@@ -121,7 +138,8 @@ class TextractOcrService implements OcrService {
       const imageBytes = await storageService.getObject(documentKey);
 
       // 2. Llamar a Textract una sola vez con el documento completo
-      const allBlocks = await this.detectText(imageBytes);
+      // Pass documentKey so large files can use S3 reference instead of bytes
+      const allBlocks = await this.detectText(imageBytes, documentKey);
 
       // 3-5. Procesar cada área
       const results: OcrResult[] = areas.map((area) => {

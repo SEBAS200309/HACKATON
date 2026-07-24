@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { ocrService } from '@/services/ocrService';
+import { ocrService } from '@/services/tesseractOcrService';
 import type { ApiErrorResponse, AreaOfInterest } from '@/types';
 
 const OCR_TIMEOUT_MS = 60_000; // 60 segundos
@@ -57,19 +57,30 @@ export async function POST(request: Request) {
     const errorMessage = error instanceof Error ? error.message : String(error);
 
     // Timeout
-    if (errorMessage === 'OCR_TIMEOUT') {
+    if (errorMessage === 'OCR_TIMEOUT' || errorMessage.includes('tiempo límite')) {
       return createErrorResponse(
         'OCR_TIMEOUT',
-        'El procesamiento OCR tardó demasiado. Intente nuevamente',
+        'El procesamiento OCR tardó demasiado. Intente con una imagen de menor resolución',
         504,
         true
       );
     }
 
-    // Error genérico de OCR
+    // Error de inicialización
+    if (errorMessage.includes('no se pudo inicializar')) {
+      return createErrorResponse(
+        'OCR_INIT_FAILED',
+        'Error al inicializar el motor OCR. Intente nuevamente en unos segundos',
+        503,
+        true
+      );
+    }
+
+    // Error genérico de OCR — incluir detalle del error
+    console.error('OCR processing error:', errorMessage);
     return createErrorResponse(
       'OCR_FAILED',
-      'Error en el procesamiento OCR. Verifique la calidad del documento e intente nuevamente',
+      `Error en el procesamiento OCR: ${errorMessage}`,
       502,
       true
     );

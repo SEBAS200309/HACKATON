@@ -2,14 +2,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Mock del ocrService antes de importar la ruta
-vi.mock('@/services/ocrService', () => ({
+vi.mock('@/services/tesseractOcrService', () => ({
   ocrService: {
     processDocument: vi.fn(),
   },
 }));
 
 import { POST } from '@/app/api/ocr/process/route';
-import { ocrService } from '@/services/ocrService';
+import { ocrService } from '@/services/tesseractOcrService';
 
 function createOcrRequest(body: unknown): Request {
   return new Request('http://localhost:3000/api/ocr/process', {
@@ -106,7 +106,7 @@ describe('POST /api/ocr/process', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data).toEqual(mockResults);
+      expect(data.results).toEqual(mockResults);
       expect(ocrService.processDocument).toHaveBeenCalledWith('sources/doc-123.pdf', areas);
     });
 

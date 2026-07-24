@@ -49,9 +49,9 @@ describe('GET /api/templates', () => {
     const data = await response.json();
 
     expect(response.status).toBe(200);
-    expect(data).toHaveLength(2);
-    expect(data[0].id).toBe('abc-123');
-    expect(data[1].id).toBe('def-456');
+    expect(data.templates).toHaveLength(2);
+    expect(data.templates[0].id).toBe('abc-123');
+    expect(data.templates[1].id).toBe('def-456');
     expect(mockListTemplates).toHaveBeenCalledWith(undefined);
   });
 
@@ -75,7 +75,7 @@ describe('GET /api/templates', () => {
     const data = await response.json();
 
     expect(response.status).toBe(200);
-    expect(data).toHaveLength(1);
+    expect(data.templates).toHaveLength(1);
     expect(mockListTemplates).toHaveBeenCalledWith('word');
   });
 

@@ -1,17 +1,24 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAppStore } from "@/store/useAppStore";
-import { DocumentCapture } from "@/components/digitization";
-import { AreaEditor } from "@/components/digitization";
-import { OcrResultsPanel } from "@/components/digitization";
-import { DownloadPanel } from "@/components/digitization";
+import {
+  DocumentCapture,
+  AreaEditor,
+  OcrResultsPanel,
+  DownloadPanel,
+  PerspectiveEditor,
+  FilterSelector,
+} from "@/components/digitization";
 import { Button, LoadingSpinner } from "@/components/ui";
 import type { TemplateMetadata, Variable, SegmentationConfig } from "@/types";
 
 const STEPS = [
   "Seleccionar plantilla",
   "Capturar documento",
+  "Corrección de perspectiva",
+  "Filtro de mejora",
   "Definir áreas",
   "Procesando OCR",
   "Revisar resultados",
@@ -177,7 +184,9 @@ function TemplateSelector({
 
 // ─── Main Digitize Page ───────────────────────────────────────────────────────
 export default function DigitizePage() {
-  // Store state
+  const router = useRouter();
+
+  // Store state (individual selectors)
   const currentStep = useAppStore((s) => s.currentStep);
   const setCurrentStep = useAppStore((s) => s.setCurrentStep);
   const wordTemplates = useAppStore((s) => s.wordTemplates);
@@ -199,13 +208,20 @@ export default function DigitizePage() {
   const setLoading = useAppStore((s) => s.setLoading);
   const addToast = useAppStore((s) => s.addToast);
   const resetDigitization = useAppStore((s) => s.resetDigitization);
+  const initWorkspace = useAppStore((s) => s.initWorkspace);
+  const addPage = useAppStore((s) => s.addPage);
 
-  // Local state for download step
+  // Local state
   const [isGenerating, setIsGenerating] = useState(false);
   const [docxDownloadUrl, setDocxDownloadUrl] = useState<string | null>(null);
   const [xlsxDownloadUrl, setXlsxDownloadUrl] = useState<string | null>(null);
   const [downloadFilename, setDownloadFilename] = useState("");
   const [downloadError, setDownloadError] = useState<string | null>(null);
+
+  // State for perspective + filter flow
+  const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null);
+  const [correctedCanvas, setCorrectedCanvas] = useState<HTMLCanvasElement | null>(null);
+  const [redirectingToWorkspace, setRedirectingToWorkspace] = useState(false);
 
   // Sincronizar auth: si el middleware nos dejó pasar, estamos autenticados
   useEffect(() => {
@@ -230,23 +246,144 @@ export default function DigitizePage() {
     }));
   }, [selectedWordTemplate, selectedXlsxTemplate, areas]);
 
-  // Validate step 2→3: at least 1 area with a valid variableName
+  // Validate step 4→5: at least 1 area with a valid variableName
   const canProceedToOcr = useMemo(() => {
     return areas.some((a) => a.variableName.trim() !== "");
   }, [areas]);
 
   // ─── Step Handlers ────────────────────────────────────────────────────────
+
+  // Step 1 → Step 2: Document captured — now go to perspective editor
+  const handleDocumentCaptured = useCallback(
+    (imageBlob: Blob) => {
+      setCapturedBlob(imageBlob);
+      setCurrentStep(2); // perspective correction step
+    },
+    [setCurrentStep]
+  );
+
+  // Legacy handler: direct document ready (used by old flow steps 4+)
   const handleDocumentReady = useCallback(
     (url: string, s3Key: string) => {
       setCurrentDocument({ url, s3Key });
-      setCurrentStep(2);
+      setCurrentStep(4); // area editor
     },
     [setCurrentDocument, setCurrentStep]
   );
 
   const handleDocumentRetake = useCallback(() => {
     setCurrentDocument(null);
+    setCapturedBlob(null);
+    setCorrectedCanvas(null);
   }, [setCurrentDocument]);
+
+  // Step 2: Perspective accepted → go to filter
+  const handlePerspectiveAccept = useCallback(
+    (_correctedBlob: Blob, canvas: HTMLCanvasElement) => {
+      setCorrectedCanvas(canvas);
+      setCurrentStep(3); // filter step
+    },
+    [setCurrentStep]
+  );
+
+  // Step 2: Perspective rejected → back to capture
+  const handlePerspectiveReject = useCallback(() => {
+    setCapturedBlob(null);
+    setCorrectedCanvas(null);
+    setCurrentStep(1);
+  }, [setCurrentStep]);
+
+  // Step 2: Perspective skipped → use original blob as canvas, go to filter
+  const handlePerspectiveSkip = useCallback(() => {
+    if (!capturedBlob) return;
+    // Create canvas from original blob
+    const img = new Image();
+    const url = URL.createObjectURL(capturedBlob);
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(img, 0, 0);
+      }
+      setCorrectedCanvas(canvas);
+      setCurrentStep(3);
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
+  }, [capturedBlob, setCurrentStep]);
+
+  // Step 3: Filter confirmed → upload processed image → init workspace → redirect
+  const handleFilterConfirm = useCallback(
+    async (filteredBlob: Blob, _filteredCanvas: HTMLCanvasElement) => {
+      if (!selectedWordTemplate) return;
+      setRedirectingToWorkspace(true);
+
+      try {
+        // Upload processed image to /api/upload
+        const formData = new FormData();
+        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+        const fileName = `procesada-${timestamp}.jpg`;
+        formData.append("file", filteredBlob, fileName);
+        formData.append("type", "source");
+        formData.append("fileName", fileName);
+
+        const response = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const data = await response.json().catch(() => null);
+          const msg = data?.error?.message || "Error al cargar la imagen procesada";
+          addToast({ type: "error", message: msg });
+          setRedirectingToWorkspace(false);
+          return;
+        }
+
+        const result = await response.json();
+
+        // Convertir blob a data URL (sobrevive navegación y localStorage, a diferencia de blob URLs)
+        const imageUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error("Error al convertir imagen"));
+          reader.readAsDataURL(filteredBlob);
+        });
+
+        // Init workspace with selected templates
+        initWorkspace(selectedWordTemplate, selectedXlsxTemplate);
+
+        // Add first page
+        addPage({
+          id: `page-${Date.now()}`,
+          imageS3Key: result.s3Key,
+          imageUrl,
+          zones: [],
+          record: {},
+          ocrProcessed: false,
+          status: "pending",
+        });
+
+        // Redirect to workspace
+        router.push("/workspace");
+      } catch {
+        addToast({
+          type: "error",
+          message: "Error al procesar la imagen. Verifique su conexión e intente nuevamente",
+        });
+        setRedirectingToWorkspace(false);
+      }
+    },
+    [selectedWordTemplate, selectedXlsxTemplate, addToast, initWorkspace, addPage, router]
+  );
+
+  // Step 3: Filter cancelled → back to perspective
+  const handleFilterCancel = useCallback(() => {
+    setCorrectedCanvas(null);
+    setCurrentStep(2);
+  }, [setCurrentStep]);
 
   const handleAreasChange = useCallback(
     (newAreas: typeof areas) => {
@@ -262,10 +399,10 @@ export default function DigitizePage() {
     [addToast]
   );
 
-  // Process OCR (step 3)
+  // Process OCR (step 5)
   const processOcr = useCallback(async () => {
     if (!currentDocument) return;
-    setCurrentStep(3);
+    setCurrentStep(5);
     setLoading(true);
 
     try {
@@ -282,17 +419,17 @@ export default function DigitizePage() {
         const data = await response.json().catch(() => null);
         const msg = data?.error?.message || "Error al procesar OCR";
         addToast({ type: "error", message: msg });
-        setCurrentStep(2);
+        setCurrentStep(4);
         setLoading(false);
         return;
       }
 
       const data = await response.json();
       setOcrResults(data.results || []);
-      setCurrentStep(4);
+      setCurrentStep(6);
     } catch {
       addToast({ type: "error", message: "Error de conexión al procesar OCR" });
-      setCurrentStep(2);
+      setCurrentStep(4);
     } finally {
       setLoading(false);
     }
@@ -302,7 +439,6 @@ export default function DigitizePage() {
   const handleFieldEdit = useCallback(
     (variableName: string, newValue: string) => {
       setEditedValue(variableName, newValue);
-      // Also update ocrResults so the panel reflects the change
       const updated = ocrResults.map((r) =>
         r.variableName === variableName ? { ...r, extractedText: newValue } : r
       );
@@ -311,9 +447,9 @@ export default function DigitizePage() {
     [ocrResults, setEditedValue, setOcrResults]
   );
 
-  // Handle approve → generate document (step 4→5)
+  // Handle approve → generate document (step 6→7)
   const handleApprove = useCallback(() => {
-    setCurrentStep(5);
+    setCurrentStep(7);
   }, [setCurrentStep]);
 
   // Generate document
@@ -322,7 +458,6 @@ export default function DigitizePage() {
     setIsGenerating(true);
     setDownloadError(null);
 
-    // Build variables map from edited values or OCR results
     const variables: Record<string, string> = {};
     for (const result of ocrResults) {
       variables[result.variableName] =
@@ -368,6 +503,9 @@ export default function DigitizePage() {
   // New digitization flow
   const handleNewDigitization = useCallback(() => {
     resetDigitization();
+    setCapturedBlob(null);
+    setCorrectedCanvas(null);
+    setRedirectingToWorkspace(false);
     setDocxDownloadUrl(null);
     setXlsxDownloadUrl(null);
     setDownloadFilename("");
@@ -397,6 +535,7 @@ export default function DigitizePage() {
 
         {/* Step Content */}
         <div className="rounded-xl border border-[#a855f7]/10 bg-[#1a1025]/50 p-4 sm:p-6">
+
           {/* Step 0: Template Selection */}
           {currentStep === 0 && (
             <div className="flex flex-col gap-6">
@@ -448,12 +587,80 @@ export default function DigitizePage() {
               <DocumentCapture
                 onDocumentReady={handleDocumentReady}
                 onRetake={handleDocumentRetake}
+                onBlobCaptured={handleDocumentCaptured}
               />
             </div>
           )}
 
-          {/* Step 2: Area Editor */}
-          {currentStep === 2 && currentDocument && (
+          {/* Step 2: Perspective Correction */}
+          {currentStep === 2 && capturedBlob && (
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-[#f5f5f5]">
+                  Corrección de perspectiva
+                </h2>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setCapturedBlob(null);
+                    setCurrentStep(1);
+                  }}
+                >
+                  Atrás
+                </Button>
+              </div>
+              <p className="text-sm text-[#a1a1aa]">
+                Ajuste las esquinas del documento para corregir la perspectiva,
+                o pulse &quot;Omitir&quot; para continuar sin corrección.
+              </p>
+              <PerspectiveEditor
+                imageBlob={capturedBlob}
+                onAccept={handlePerspectiveAccept}
+                onReject={handlePerspectiveReject}
+                onSkip={handlePerspectiveSkip}
+              />
+            </div>
+          )}
+
+          {/* Step 3: Filter Selection */}
+          {currentStep === 3 && correctedCanvas && (
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-[#f5f5f5]">
+                  Filtro de mejora
+                </h2>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleFilterCancel}
+                >
+                  Atrás
+                </Button>
+              </div>
+              <p className="text-sm text-[#a1a1aa]">
+                Seleccione un filtro para mejorar la legibilidad del documento,
+                o confirme &quot;Original&quot; para mantener la imagen sin cambios.
+              </p>
+              {redirectingToWorkspace ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-4">
+                  <LoadingSpinner size="lg" message="Preparando espacio de trabajo..." />
+                  <p className="text-sm text-[#a1a1aa]">
+                    Subiendo imagen procesada y configurando el workspace
+                  </p>
+                </div>
+              ) : (
+                <FilterSelector
+                  sourceCanvas={correctedCanvas}
+                  onConfirm={handleFilterConfirm}
+                  onCancel={handleFilterCancel}
+                />
+              )}
+            </div>
+          )}
+
+          {/* Step 4: Area Editor (standalone flow) */}
+          {currentStep === 4 && currentDocument && (
             <div className="flex flex-col gap-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-[#f5f5f5]">
@@ -493,18 +700,18 @@ export default function DigitizePage() {
             </div>
           )}
 
-          {/* Step 3: OCR Processing (loading state) */}
-          {currentStep === 3 && (
+          {/* Step 5: OCR Processing (loading state) */}
+          {currentStep === 5 && (
             <div className="flex flex-col items-center justify-center py-12 gap-4">
-              <LoadingSpinner size="lg" message="Procesando OCR con AWS Textract..." />
+              <LoadingSpinner size="lg" message="Procesando OCR..." />
               <p className="text-sm text-[#a1a1aa]">
                 Esto puede tomar unos segundos dependiendo del tamaño del documento
               </p>
             </div>
           )}
 
-          {/* Step 4: Review OCR Results */}
-          {currentStep === 4 && (
+          {/* Step 6: Review OCR Results */}
+          {currentStep === 6 && (
             <div className="flex flex-col gap-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-[#f5f5f5]">
@@ -513,7 +720,7 @@ export default function DigitizePage() {
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => setCurrentStep(2)}
+                  onClick={() => setCurrentStep(4)}
                 >
                   Volver a áreas
                 </Button>
@@ -528,8 +735,8 @@ export default function DigitizePage() {
             </div>
           )}
 
-          {/* Step 5: Download */}
-          {currentStep === 5 && (
+          {/* Step 7: Download */}
+          {currentStep === 7 && (
             <div className="flex flex-col gap-4">
               <h2 className="text-lg font-semibold text-[#f5f5f5]">
                 Descargar documentos generados

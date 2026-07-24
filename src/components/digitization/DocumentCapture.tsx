@@ -1,14 +1,20 @@
 "use client";
 
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import { Button, LoadingSpinner } from "@/components/ui";
 import { useAppStore } from "@/store/useAppStore";
+import { UploadManager } from "@/utils/uploadManager";
+import { shouldCompress, compressImage } from "@/utils/imageCompression";
+import { UploadProgressBar } from "@/components/ui/UploadProgressBar";
 import CameraCapture from "./CameraCapture";
 import FileUpload from "./FileUpload";
+import type { UploadProgress } from "@/types";
 
 export interface DocumentCaptureProps {
   onDocumentReady: (documentUrl: string, s3Key: string) => void;
   onRetake: () => void;
+  /** When provided, captures the raw blob and calls this instead of uploading */
+  onBlobCaptured?: (blob: Blob) => void;
 }
 
 type CaptureState = "idle" | "uploading" | "preview";
@@ -19,66 +25,151 @@ interface UploadedDocument {
   fileName: string;
 }
 
-export default function DocumentCapture({ onDocumentReady, onRetake }: DocumentCaptureProps) {
+export default function DocumentCapture({ onDocumentReady, onRetake, onBlobCaptured }: DocumentCaptureProps) {
   const [state, setState] = useState<CaptureState>("idle");
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [uploadedDoc, setUploadedDoc] = useState<UploadedDocument | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [uploads, setUploads] = useState<UploadProgress[]>([]);
   const addToast = useAppStore((s) => s.addToast);
+
+  // Track pending upload file IDs to correlate responses
+  const pendingUploadRef = useRef<{
+    fileId: string;
+    file: File | Blob;
+    fileName: string;
+  } | null>(null);
+
+  const uploadManagerRef = useRef<UploadManager | null>(null);
+
+  const getUploadManager = useCallback(() => {
+    if (!uploadManagerRef.current) {
+      uploadManagerRef.current = new UploadManager({
+        maxConcurrent: 3,
+        maxRetries: 3,
+        onProgress: (progress) => {
+          setUploads([...progress]);
+        },
+        onFileComplete: (fileId, response) => {
+          const pending = pendingUploadRef.current;
+          if (pending && pending.fileId === fileId && response) {
+            const result = response as { s3Key?: string; fileName?: string };
+            if (result.s3Key) {
+              const localUrl = URL.createObjectURL(pending.file);
+              setPreviewUrl(localUrl);
+              setUploadedDoc({
+                url: localUrl,
+                s3Key: result.s3Key,
+                fileName: result.fileName || pending.fileName,
+              });
+              setState("preview");
+            } else {
+              addToast({
+                type: "error",
+                message: "Error al cargar el documento. Respuesta inválida del servidor",
+              });
+              setState("idle");
+            }
+            pendingUploadRef.current = null;
+          }
+        },
+        onFileFailed: (fileId, error) => {
+          const pending = pendingUploadRef.current;
+          if (pending && pending.fileId === fileId) {
+            addToast({
+              type: "error",
+              message: error || "Error al cargar el documento. Verifique su conexión e intente nuevamente",
+            });
+            setState("idle");
+            pendingUploadRef.current = null;
+          }
+        },
+      });
+    }
+    return uploadManagerRef.current;
+  }, [addToast]);
 
   const uploadFile = useCallback(
     async (file: File | Blob, fileName?: string) => {
       setState("uploading");
+      const name = fileName || "captura.jpg";
 
       try {
-        const formData = new FormData();
-        formData.append("file", file, fileName || "captura.jpg");
-        formData.append("type", "source");
-        formData.append("fileName", fileName || "captura.jpg");
+        let fileToUpload: File;
 
-        const response = await fetch("/api/upload", {
-          method: "POST",
-          body: formData,
-        });
-
-        if (!response.ok) {
-          const data = await response.json();
-          const message =
-            data?.error?.message ||
-            "Error al cargar el documento. Verifique su conexión e intente nuevamente";
-          addToast({ type: "error", message });
-          setState("idle");
-          return;
+        // Convert Blob to File if necessary for compression check
+        if (file instanceof File) {
+          fileToUpload = file;
+        } else {
+          fileToUpload = new File([file], name, { type: file.type || "image/jpeg" });
         }
 
-        const result = await response.json();
+        // Apply intelligent compression if file > 2MB
+        if (shouldCompress(fileToUpload)) {
+          try {
+            const compressionResult = await compressImage(fileToUpload);
+            fileToUpload = new File([compressionResult.blob], name, {
+              type: "image/jpeg",
+            });
+            addToast({
+              type: "success",
+              message: "Imagen comprimida automáticamente para optimizar la carga",
+            });
+          } catch {
+            // If compression fails, use original file
+            addToast({
+              type: "warning",
+              message: "No se pudo comprimir la imagen. Se usará el archivo original",
+            });
+          }
+        }
 
-        // Create a local preview URL
-        const localUrl = URL.createObjectURL(file);
-        setPreviewUrl(localUrl);
-        setUploadedDoc({
-          url: localUrl,
-          s3Key: result.s3Key,
-          fileName: result.fileName || fileName || "captura.jpg",
-        });
-        setState("preview");
+        // Use UploadManager for upload with progress, retry, and cancel
+        const manager = getUploadManager();
+        const fileId = manager.enqueue(fileToUpload, "source");
+
+        // Store pending upload info to correlate with completion callback
+        pendingUploadRef.current = {
+          fileId,
+          file: fileToUpload,
+          fileName: name,
+        };
       } catch {
         addToast({
           type: "error",
-          message: "Error al cargar el documento. Verifique su conexión e intente nuevamente",
+          message: "Error al preparar el archivo para carga",
         });
         setState("idle");
       }
     },
-    [addToast]
+    [addToast, getUploadManager]
+  );
+
+  const handleCancelUpload = useCallback(
+    (fileId: string) => {
+      const manager = getUploadManager();
+      manager.cancel(fileId);
+
+      const pending = pendingUploadRef.current;
+      if (pending && pending.fileId === fileId) {
+        pendingUploadRef.current = null;
+        setState("idle");
+        addToast({ type: "warning", message: "Carga cancelada" });
+      }
+    },
+    [getUploadManager, addToast]
   );
 
   const handleCameraCapture = useCallback(
     (imageBlob: Blob) => {
+      if (onBlobCaptured) {
+        onBlobCaptured(imageBlob);
+        return;
+      }
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
       uploadFile(imageBlob, `captura-${timestamp}.jpg`);
     },
-    [uploadFile]
+    [uploadFile, onBlobCaptured]
   );
 
   const handleCameraError = useCallback((error: string) => {
@@ -87,9 +178,13 @@ export default function DocumentCapture({ onDocumentReady, onRetake }: DocumentC
 
   const handleFileSelected = useCallback(
     (file: File) => {
+      if (onBlobCaptured) {
+        onBlobCaptured(file);
+        return;
+      }
       uploadFile(file, file.name);
     },
-    [uploadFile]
+    [uploadFile, onBlobCaptured]
   );
 
   const handleConfirm = useCallback(() => {
@@ -106,6 +201,7 @@ export default function DocumentCapture({ onDocumentReady, onRetake }: DocumentC
     setUploadedDoc(null);
     setPreviewUrl(null);
     setCameraError(null);
+    setUploads([]);
     setState("idle");
     onRetake();
   }, [previewUrl, onRetake]);
@@ -174,7 +270,13 @@ export default function DocumentCapture({ onDocumentReady, onRetake }: DocumentC
   if (state === "uploading") {
     return (
       <div className="flex flex-col items-center justify-center p-8 gap-4">
-        <LoadingSpinner size="lg" message="Subiendo documento..." />
+        {uploads.length > 0 ? (
+          <div className="w-full max-w-lg">
+            <UploadProgressBar uploads={uploads} onCancel={handleCancelUpload} />
+          </div>
+        ) : (
+          <LoadingSpinner size="lg" message="Preparando archivo..." />
+        )}
       </div>
     );
   }

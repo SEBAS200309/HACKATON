@@ -81,3 +81,108 @@ export interface ApiErrorResponse {
     retryable: boolean;
   };
 }
+
+// ─── Workspace Types ──────────────────────────────────────────────────────────
+
+export interface WorkspacePage {
+  id: string;
+  pageNumber: number;
+  imageS3Key: string;
+  imageUrl: string;
+  zones: WorkspaceZone[];
+  record: Record<string, string>;
+  ocrProcessed: boolean;
+  status: 'pending' | 'processing' | 'completed' | 'error';
+}
+
+export interface WorkspaceZone {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  variableName: string;
+  color: string;
+}
+
+export interface WorkspaceSession {
+  id: string;
+  templateId: string;
+  xlsxTemplateId?: string;
+  pages: WorkspacePage[];
+  savedAt: string;
+}
+
+export interface GeneratedFile {
+  id: string;
+  fileName: string;
+  downloadUrl: string;
+  type: 'docx' | 'xlsx' | 'zip';
+}
+
+// ─── Batch Generation Types ───────────────────────────────────────────────────
+
+export interface BatchRecord {
+  pageId: string;
+  pageNumber: number;
+  values: Record<string, string>;
+  confidence: Record<string, number>;
+  complete: boolean;
+}
+
+export interface BatchGenerationResult {
+  files: GeneratedFile[];
+  zipDownloadUrl: string;
+  errors: Array<{ recordIndex: number; message: string }>;
+}
+
+// ─── Upload Types ─────────────────────────────────────────────────────────────
+
+export interface UploadProgress {
+  fileId: string;
+  fileName: string;
+  progress: number;
+  status: 'pending' | 'uploading' | 'completed' | 'failed' | 'cancelled';
+  retryCount: number;
+  error?: string;
+}
+
+// ─── Image Processing Types ───────────────────────────────────────────────────
+
+export type FilterType = 'none' | 'grayscale' | 'whiteEnhance' | 'grayscaleWhiteEnhance';
+
+export interface Point {
+  x: number;
+  y: number;
+}
+
+export interface PerspectiveCorrectionState {
+  corners: [Point, Point, Point, Point]; // TL, TR, BR, BL
+  autoDetected: boolean;
+  confirmed: boolean;
+}
+
+// ─── API Route Types (Batch & Session) ────────────────────────────────────────
+
+export interface BatchGenerateRequest {
+  templateId: string;
+  xlsxTemplateId?: string;
+  records: Array<Record<string, string>>;
+}
+
+export interface BatchGenerateResponse {
+  files: Array<{
+    id: string;
+    fileName: string;
+    downloadUrl: string;
+    type: 'docx' | 'xlsx';
+  }>;
+  zipDownloadUrl: string;
+  errors: Array<{ recordIndex: number; message: string }>;
+}
+
+export interface SaveSessionRequest {
+  templateId: string;
+  xlsxTemplateId?: string;
+  pages: WorkspacePage[];
+}

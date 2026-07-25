@@ -3,7 +3,7 @@ const nextConfig = {
   output: 'standalone',
   allowedDevOrigins: ["http://192.168.40.14:3000"],
   experimental: {
-    serverComponentsExternalPackages: ['tesseract.js', 'sharp'],
+    serverComponentsExternalPackages: ['ppu-paddle-ocr', 'sharp', 'onnxruntime-node', 'onnxruntime-common'],
   },
   webpack: (config, { isServer }) => {
     if (isServer) {

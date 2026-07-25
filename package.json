@@ -19,7 +19,9 @@
     "docxtemplater": "^3.69.2",
     "exceljs": "^4.4.0",
     "next": "14.2.35",
+    "onnxruntime-node": "^1.27.0",
     "pizzip": "^3.2.0",
+    "ppu-paddle-ocr": "^6.2.0",
     "react": "^18",
     "react-dom": "^18",
     "sharp": "^0.33.5",
@@ -45,6 +47,7 @@
     "vitest": "^4.1.10"
   },
   "allowScripts": {
-    "sharp@0.33.5": true
+    "sharp@0.33.5": true,
+    "onnxruntime-node@1.27.0": true
   }
 }

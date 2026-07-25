@@ -285,18 +285,21 @@ El enfoque es bottom-up: primero utilidades de bajo nivel, luego servicios, lueg
     - _Requirements: 5.4, 5.5_
 
 - [ ] 13. Configuración de despliegue AWS Amplify
-  - [~] 13.1 Documentar proceso de despliegue step-by-step
+  - [ ] 13.1 Documentar proceso de despliegue step-by-step
     - Crear `docs/deployment-guide.md` con instrucciones completas
     - Incluir: conexión de repositorio, configuración de build, variables de entorno, dominio custom, verificación
     - Documentar configuración de CORS en S3 para dominio Amplify
-    - Documentar configuración de Lambda (memory 1536MB, timeout 60s)
+    - Documentar configuración de Lambda (memory 2048MB, timeout 120s) — PaddleOCR con ONNX Runtime requiere más recursos
+    - Documentar que PaddleOCR descarga modelos (~20MB) del CDN en primer uso y los cachea
     - _Requirements: 11.2, 11.4, 11.5, 11.6, 11.8, 11.9_
 
-  - [~] 13.2 Configurar inclusión de Tesseract WASM y traineddata en el build
-    - Asegurar que tesseract-core WASM binary se incluya en el deployment package
-    - Configurar copia de spa.traineddata al directorio accesible en runtime
-    - Implementar fallback de carga desde S3 con caché en /tmp para Lambda
-    - _Requirements: 11.3, 12.2, 12.3, 12.8_
+  - [ ] 13.2 Configurar compatibilidad de PaddleOCR (ONNX Runtime) con Lambda
+    - Asegurar que `onnxruntime-node` binarios nativos se incluyan en el deployment package
+    - Configurar `serverComponentsExternalPackages` en next.config: ['ppu-paddle-ocr', 'sharp', 'onnxruntime-node', 'onnxruntime-common']
+    - Verificar que los modelos ONNX se descarguen correctamente en el primer cold start de Lambda
+    - Configurar `/tmp` con suficiente espacio (512MB) para caché de modelos ONNX descargados
+    - Verificar tiempo de cold start con PaddleOCR (~5-10s primera invocación, <1s warm)
+    - _Requirements: 11.3, 12.1, 12.3, 12.5_
 
 - [~] 14. Final checkpoint - Verificar integración completa
   - Ensure all tests pass, ask the user if questions arise.

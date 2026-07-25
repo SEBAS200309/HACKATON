@@ -144,30 +144,34 @@ export function stopAreasAutoSave(): void {
 // ─── Workspace helpers ────────────────────────────────────────────────────────
 
 function extractVariablesFromTemplates(
-  wordTemplate: TemplateMetadata,
-  xlsxTemplate: TemplateMetadata | null | undefined
+  primaryTemplate: TemplateMetadata,
+  secondaryTemplate: TemplateMetadata | null | undefined
 ): Variable[] {
   const variableMap = new Map<string, Variable>();
 
-  // Extract from Word template placeholders
-  for (const placeholder of wordTemplate.placeholders) {
+  // Determine source based on actual template type
+  const primarySource: 'word' | 'xlsx' = primaryTemplate.type === 'xlsx' ? 'xlsx' : 'word';
+
+  // Extract from primary template placeholders
+  for (const placeholder of primaryTemplate.placeholders) {
     variableMap.set(placeholder, {
       name: placeholder,
-      source: 'word',
+      source: primarySource,
       assigned: false,
     });
   }
 
-  // Extract from XLSX template placeholders (column headers)
-  if (xlsxTemplate) {
-    for (const placeholder of xlsxTemplate.placeholders) {
+  // Extract from secondary template placeholders
+  if (secondaryTemplate) {
+    const secondarySource: 'word' | 'xlsx' = secondaryTemplate.type === 'xlsx' ? 'xlsx' : 'word';
+    for (const placeholder of secondaryTemplate.placeholders) {
       const existing = variableMap.get(placeholder);
       if (existing) {
         variableMap.set(placeholder, { ...existing, source: 'both' });
       } else {
         variableMap.set(placeholder, {
           name: placeholder,
-          source: 'xlsx',
+          source: secondarySource,
           assigned: false,
         });
       }

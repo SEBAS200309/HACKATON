@@ -99,15 +99,36 @@ function TemplateSelector({
   onSelectWord,
   onSelectXlsx,
 }: TemplateSelectorProps) {
+  // Combine variables from both selected templates
+  const combinedPlaceholders = useMemo(() => {
+    const varMap = new Map<string, "word" | "xlsx" | "both">();
+    if (selectedWord) {
+      for (const p of selectedWord.placeholders) {
+        varMap.set(p, "word");
+      }
+    }
+    if (selectedXlsx) {
+      for (const p of selectedXlsx.placeholders) {
+        varMap.set(p, varMap.has(p) ? "both" : "xlsx");
+      }
+    }
+    return varMap;
+  }, [selectedWord, selectedXlsx]);
+
   return (
     <div className="flex flex-col gap-6 w-full max-w-lg mx-auto">
-      {/* Word template (required) */}
+      {/* Helper text */}
+      <p className="text-sm text-[#a1a1aa]">
+        Seleccione al menos una plantilla. Puede usar Word, Excel o ambas.
+      </p>
+
+      {/* Word template */}
       <div>
         <label
           htmlFor="word-template-select"
           className="block text-sm font-medium text-[#f5f5f5] mb-2"
         >
-          Plantilla Word (.docx) <span className="text-red-400">*</span>
+          Plantilla Word (.docx)
         </label>
         <select
           id="word-template-select"
@@ -115,13 +136,12 @@ function TemplateSelector({
           onChange={(e) => {
             const t = wordTemplates.find((wt) => wt.id === e.target.value) || null;
             onSelectWord(t);
-            if (!t) onSelectXlsx(null);
           }}
           className="w-full rounded-lg border border-[#a1a1aa]/30 bg-[#1a1025] px-4 py-2.5
             text-sm text-[#f5f5f5] focus:outline-none focus:ring-2 focus:ring-[#a855f7]
             focus:border-[#a855f7] transition-colors"
         >
-          <option value="">Seleccione una plantilla Word...</option>
+          <option value="">Sin plantilla Word</option>
           {wordTemplates.map((t) => (
             <option key={t.id} value={t.id}>
               {t.fileName} ({t.placeholders.length} variables)
@@ -130,14 +150,14 @@ function TemplateSelector({
         </select>
       </div>
 
-      {/* XLSX template (optional, shown after Word selected) */}
-      {selectedWord && xlsxTemplates.length > 0 && (
+      {/* XLSX template (always visible) */}
+      {xlsxTemplates.length > 0 && (
         <div>
           <label
             htmlFor="xlsx-template-select"
             className="block text-sm font-medium text-[#f5f5f5] mb-2"
           >
-            Plantilla Excel (.xlsx) <span className="text-[#a1a1aa]">(opcional)</span>
+            Plantilla Excel (.xlsx)
           </label>
           <select
             id="xlsx-template-select"
@@ -160,19 +180,38 @@ function TemplateSelector({
         </div>
       )}
 
-      {/* Template info */}
-      {selectedWord && (
+      {/* Template info — combined variables from both templates */}
+      {combinedPlaceholders.size > 0 && (
         <div className="rounded-lg border border-[#a855f7]/20 bg-[#1a1025] p-4">
           <h4 className="text-sm font-medium text-[#f5f5f5] mb-2">
-            Variables de la plantilla
+            Variables de las plantillas seleccionadas
           </h4>
           <div className="flex flex-wrap gap-2">
-            {selectedWord.placeholders.map((p) => (
+            {Array.from(combinedPlaceholders.entries()).map(([name, source]) => (
               <span
-                key={p}
-                className="inline-block rounded-full bg-[#a855f7]/10 px-3 py-1 text-xs text-[#c084fc]"
+                key={name}
+                className={`inline-block rounded-full px-3 py-1 text-xs ${
+                  source === "both"
+                    ? "bg-[#a855f7]/20 text-[#e9d5ff]"
+                    : source === "xlsx"
+                      ? "bg-emerald-500/10 text-emerald-400"
+                      : "bg-[#a855f7]/10 text-[#c084fc]"
+                }`}
+                title={
+                  source === "both"
+                    ? "Variable en Word y Excel"
+                    : source === "xlsx"
+                      ? "Variable solo en Excel"
+                      : "Variable solo en Word"
+                }
               >
-                {p}
+                {name}
+                {source === "both" && (
+                  <span className="ml-1 text-[0.6rem] opacity-70">W+X</span>
+                )}
+                {source === "xlsx" && (
+                  <span className="ml-1 text-[0.6rem] opacity-70">X</span>
+                )}
               </span>
             ))}
           </div>
@@ -235,13 +274,27 @@ export default function DigitizePage() {
     }
   }, [wordTemplates.length, loadTemplates]);
 
-  // Derive available variables from selected Word template
+  // Derive available variables from both selected templates (Word + XLSX)
   const availableVariables: Variable[] = useMemo(() => {
-    if (!selectedWordTemplate) return [];
-    const xlsxPlaceholders = selectedXlsxTemplate?.placeholders || [];
-    return selectedWordTemplate.placeholders.map((name) => ({
+    if (!selectedWordTemplate && !selectedXlsxTemplate) return [];
+
+    const varMap = new Map<string, "word" | "xlsx" | "both">();
+
+    if (selectedWordTemplate) {
+      for (const name of selectedWordTemplate.placeholders) {
+        varMap.set(name, "word");
+      }
+    }
+
+    if (selectedXlsxTemplate) {
+      for (const name of selectedXlsxTemplate.placeholders) {
+        varMap.set(name, varMap.has(name) ? "both" : "xlsx");
+      }
+    }
+
+    return Array.from(varMap.entries()).map(([name, source]) => ({
       name,
-      source: xlsxPlaceholders.includes(name) ? "both" as const : "word" as const,
+      source,
       assigned: areas.some((a) => a.variableName === name),
     }));
   }, [selectedWordTemplate, selectedXlsxTemplate, areas]);
@@ -317,7 +370,7 @@ export default function DigitizePage() {
   // Step 3: Filter confirmed → upload processed image → init workspace → redirect
   const handleFilterConfirm = useCallback(
     async (filteredBlob: Blob, _filteredCanvas: HTMLCanvasElement) => {
-      if (!selectedWordTemplate) return;
+      if (!selectedWordTemplate && !selectedXlsxTemplate) return;
       setRedirectingToWorkspace(true);
 
       try {
@@ -352,8 +405,9 @@ export default function DigitizePage() {
           reader.readAsDataURL(filteredBlob);
         });
 
-        // Init workspace with selected templates
-        initWorkspace(selectedWordTemplate, selectedXlsxTemplate);
+        // Init workspace with whichever template is available as primary
+        const primaryTemplate = selectedWordTemplate || selectedXlsxTemplate!;
+        initWorkspace(primaryTemplate, selectedWordTemplate ? selectedXlsxTemplate : null);
 
         // Add first page
         addPage({
@@ -558,7 +612,7 @@ export default function DigitizePage() {
                     <Button
                       variant="primary"
                       size="md"
-                      disabled={!selectedWordTemplate}
+                      disabled={!selectedWordTemplate && !selectedXlsxTemplate}
                       onClick={() => setCurrentStep(1)}
                     >
                       Continuar

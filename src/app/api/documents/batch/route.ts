@@ -38,23 +38,30 @@ export async function POST(request: Request) {
 
     // Obtener metadata de plantillas desde templates/index.json
     const templatesIndex = (await storageService.getJsonIndex('templates')) as TemplateMetadata[];
-    const wordTemplate = templatesIndex.find((t) => t.id === templateId);
 
-    if (!wordTemplate) {
+    // Buscar la plantilla principal por templateId y verificar su tipo
+    const primaryTemplate = templatesIndex.find((t) => t.id === templateId);
+
+    if (!primaryTemplate) {
       return createErrorResponse(
         'BATCH_FAILED',
-        'La plantilla Word especificada no fue encontrada',
+        'La plantilla especificada no fue encontrada',
         400
       );
     }
 
-    let xlsxTemplate: TemplateMetadata | undefined;
-    if (xlsxTemplateId) {
-      xlsxTemplate = templatesIndex.find((t) => t.id === xlsxTemplateId);
-      if (!xlsxTemplate) {
+    // Determinar el escenario según el tipo de la plantilla principal
+    const isWordPrimary = primaryTemplate.type === 'word';
+    const isXlsxPrimary = primaryTemplate.type === 'xlsx';
+
+    // Resolver plantilla XLSX secundaria (solo aplica si primary es Word)
+    let secondaryXlsxTemplate: TemplateMetadata | undefined;
+    if (isWordPrimary && xlsxTemplateId) {
+      secondaryXlsxTemplate = templatesIndex.find((t) => t.id === xlsxTemplateId);
+      if (!secondaryXlsxTemplate) {
         return createErrorResponse(
           'BATCH_FAILED',
-          'La plantilla Excel especificada no fue encontrada',
+          'La plantilla Excel secundaria especificada no fue encontrada',
           400
         );
       }
@@ -63,74 +70,120 @@ export async function POST(request: Request) {
     const batchId = uuidv4();
     const batchPrefix = `generated/batch/${batchId}`;
     const dateStr = new Date().toISOString().slice(0, 10);
-    const templateName = wordTemplate.fileName.replace(/\.[^/.]+$/, '');
+    const templateName = primaryTemplate.fileName.replace(/\.[^/.]+$/, '');
 
     const generatedFiles: BatchGenerateResponse['files'] = [];
     const errors: BatchGenerateResponse['errors'] = [];
 
-    // Generar un .docx por cada record
-    for (let i = 0; i < records.length; i++) {
-      const record = records[i];
-      try {
-        const docxBuffer = await documentGenerationService.fillWordTemplate(
-          wordTemplate.s3Key,
-          record
-        );
+    // ─── Escenario 1: Word only (o Word + XLSX secundario) ─────────────────────
+    if (isWordPrimary) {
+      // Generar un .docx por cada record
+      for (let i = 0; i < records.length; i++) {
+        const record = records[i];
+        try {
+          const docxBuffer = await documentGenerationService.fillWordTemplate(
+            primaryTemplate.s3Key,
+            record
+          );
 
-        const docId = uuidv4();
-        const docxFileName = `${templateName}_${dateStr}_${i + 1}.docx`;
-        const docxS3Key = `${batchPrefix}/${docxFileName}`;
+          const docId = uuidv4();
+          const docxFileName = `${templateName}_${dateStr}_${i + 1}.docx`;
+          const docxS3Key = `${batchPrefix}/${docxFileName}`;
 
-        await storageService.putObject(
-          docxS3Key,
-          docxBuffer,
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-        );
+          await storageService.putObject(
+            docxS3Key,
+            docxBuffer,
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          );
 
-        const downloadUrl = await storageService.getPresignedDownloadUrl(docxS3Key, 3600);
+          const downloadUrl = await storageService.getPresignedDownloadUrl(docxS3Key, 3600);
 
-        generatedFiles.push({
-          id: docId,
-          fileName: docxFileName,
-          downloadUrl,
-          type: 'docx',
-        });
-      } catch (error) {
-        errors.push({
-          recordIndex: i,
-          message: `Error al generar documento para el registro ${i + 1}: ${error instanceof Error ? error.message : 'Error desconocido'}`,
-        });
+          generatedFiles.push({
+            id: docId,
+            fileName: docxFileName,
+            downloadUrl,
+            type: 'docx',
+          });
+        } catch (error) {
+          errors.push({
+            recordIndex: i,
+            message: `Error al generar documento para el registro ${i + 1}: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+          });
+        }
+      }
+
+      // Generar XLSX acumulativo si se proporcionó xlsxTemplateId secundario
+      if (secondaryXlsxTemplate) {
+        try {
+          let currentBuffer: Buffer | null = null;
+          for (let i = 0; i < records.length; i++) {
+            // Saltar records que fallaron en la generación DOCX
+            if (errors.some((e) => e.recordIndex === i)) {
+              continue;
+            }
+
+            try {
+              const sourceKey = currentBuffer
+                ? `${batchPrefix}/_temp_xlsx.xlsx`
+                : secondaryXlsxTemplate.s3Key;
+
+              if (currentBuffer) {
+                await storageService.putObject(
+                  sourceKey,
+                  currentBuffer,
+                  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                );
+              }
+
+              currentBuffer = await documentGenerationService.fillXlsxTemplate(
+                sourceKey,
+                records[i]
+              );
+            } catch {
+              errors.push({
+                recordIndex: i,
+                message: `Error al agregar registro ${i + 1} a la hoja Excel`,
+              });
+            }
+          }
+
+          if (currentBuffer) {
+            const xlsxFileName = `${templateName}_${dateStr}.xlsx`;
+            const xlsxS3Key = `${batchPrefix}/${xlsxFileName}`;
+
+            await storageService.putObject(
+              xlsxS3Key,
+              currentBuffer,
+              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            );
+
+            const xlsxDownloadUrl = await storageService.getPresignedDownloadUrl(xlsxS3Key, 3600);
+
+            generatedFiles.push({
+              id: uuidv4(),
+              fileName: xlsxFileName,
+              downloadUrl: xlsxDownloadUrl,
+              type: 'xlsx',
+            });
+          }
+        } catch (error) {
+          errors.push({
+            recordIndex: -1,
+            message: `Error al generar la hoja Excel: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+          });
+        }
       }
     }
 
-    // Si todos los records fallaron, retornar error completo
-    if (generatedFiles.length === 0) {
-      return createErrorResponse(
-        'BATCH_FAILED',
-        'Error al generar el lote completo. Ningún documento pudo ser generado',
-        500,
-        true
-      );
-    }
-
-    // Generar XLSX acumulativo si se proporcionó xlsxTemplateId
-    let xlsxBuffer: Buffer | null = null;
-    if (xlsxTemplate) {
+    // ─── Escenario 2: Excel only (templateId apunta a una plantilla xlsx) ──────
+    if (isXlsxPrimary) {
       try {
-        // Generar XLSX secuencialmente para acumular filas
         let currentBuffer: Buffer | null = null;
         for (let i = 0; i < records.length; i++) {
-          // Saltar records que fallaron en la generación DOCX
-          if (errors.some((e) => e.recordIndex === i)) {
-            continue;
-          }
-
           try {
-            // Para la primera iteración usar la plantilla original,
-            // para las siguientes usar el buffer acumulado
             const sourceKey = currentBuffer
               ? `${batchPrefix}/_temp_xlsx.xlsx`
-              : xlsxTemplate.s3Key;
+              : primaryTemplate.s3Key;
 
             if (currentBuffer) {
               await storageService.putObject(
@@ -145,7 +198,6 @@ export async function POST(request: Request) {
               records[i]
             );
           } catch {
-            // Si falla un registro en XLSX, continuar con los demás
             errors.push({
               recordIndex: i,
               message: `Error al agregar registro ${i + 1} a la hoja Excel`,
@@ -153,15 +205,13 @@ export async function POST(request: Request) {
           }
         }
 
-        xlsxBuffer = currentBuffer;
-
-        if (xlsxBuffer) {
+        if (currentBuffer) {
           const xlsxFileName = `${templateName}_${dateStr}.xlsx`;
           const xlsxS3Key = `${batchPrefix}/${xlsxFileName}`;
 
           await storageService.putObject(
             xlsxS3Key,
-            xlsxBuffer,
+            currentBuffer,
             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
           );
 
@@ -175,7 +225,6 @@ export async function POST(request: Request) {
           });
         }
       } catch (error) {
-        // XLSX generation failed entirely but DOCX files are still valid
         errors.push({
           recordIndex: -1,
           message: `Error al generar la hoja Excel: ${error instanceof Error ? error.message : 'Error desconocido'}`,
@@ -183,11 +232,21 @@ export async function POST(request: Request) {
       }
     }
 
-    // Empaquetar todo en ZIP usando archiver
+    // ─── Verificar que al menos un archivo fue generado ────────────────────────
+    if (generatedFiles.length === 0) {
+      return createErrorResponse(
+        'BATCH_FAILED',
+        'Error al generar el lote completo. Ningún documento pudo ser generado',
+        500,
+        true
+      );
+    }
+
+    // ─── Empaquetar en ZIP ─────────────────────────────────────────────────────
     const zipFileName = `${templateName}_${dateStr}_lote.zip`;
     const zipS3Key = `${batchPrefix}/${zipFileName}`;
 
-    const zipBuffer = await createZipBuffer(generatedFiles, batchPrefix, xlsxBuffer);
+    const zipBuffer = await createZipBuffer(generatedFiles, batchPrefix);
 
     await storageService.putObject(
       zipS3Key,
@@ -221,29 +280,20 @@ export async function POST(request: Request) {
  */
 async function createZipBuffer(
   files: BatchGenerateResponse['files'],
-  batchPrefix: string,
-  xlsxBuffer: Buffer | null
+  batchPrefix: string
 ): Promise<Buffer> {
   const zip = new JSZip();
 
-  // Agregar archivos DOCX al ZIP
   for (const file of files) {
-    if (file.type === 'docx') {
-      const s3Key = `${batchPrefix}/${file.fileName}`;
-      const fileBuffer = await storageService.getObject(s3Key);
-      zip.file(file.fileName, fileBuffer);
-    }
+    const s3Key = `${batchPrefix}/${file.fileName}`;
+    const fileBuffer = await storageService.getObject(s3Key);
+    zip.file(file.fileName, fileBuffer);
   }
 
-  // Agregar XLSX si existe
-  if (xlsxBuffer) {
-    const xlsxFile = files.find((f) => f.type === 'xlsx');
-    if (xlsxFile) {
-      zip.file(xlsxFile.fileName, xlsxBuffer);
-    }
-  }
-
-  // Generar el ZIP como Buffer
-  const zipUint8Array = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 9 } });
+  const zipUint8Array = await zip.generateAsync({
+    type: 'nodebuffer',
+    compression: 'DEFLATE',
+    compressionOptions: { level: 9 },
+  });
   return Buffer.from(zipUint8Array);
 }

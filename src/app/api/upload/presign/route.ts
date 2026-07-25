@@ -25,6 +25,14 @@ export async function GET(request: Request) {
       );
     }
 
+    // Reject path traversal attempts
+    if (key.includes('..') || key.includes('./')) {
+      return NextResponse.json(
+        { error: { code: 'FORBIDDEN', message: 'Ruta no válida', retryable: false } },
+        { status: 403 }
+      );
+    }
+
     const url = await storageService.getPresignedDownloadUrl(key, 3600);
     return NextResponse.json({ url });
   } catch {

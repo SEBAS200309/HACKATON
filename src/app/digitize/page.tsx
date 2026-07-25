@@ -9,7 +9,6 @@ import {
   OcrResultsPanel,
   DownloadPanel,
   PerspectiveEditor,
-  FilterSelector,
 } from "@/components/digitization";
 import { Button, LoadingSpinner } from "@/components/ui";
 import type { TemplateMetadata, Variable, SegmentationConfig } from "@/types";
@@ -18,7 +17,7 @@ const STEPS = [
   "Seleccionar plantilla",
   "Capturar documento",
   "Corrección de perspectiva",
-  "Filtro de mejora",
+  "Procesando imagen",
   "Definir áreas",
   "Procesando OCR",
   "Revisar resultados",
@@ -99,15 +98,36 @@ function TemplateSelector({
   onSelectWord,
   onSelectXlsx,
 }: TemplateSelectorProps) {
+  // Combine variables from both selected templates
+  const combinedPlaceholders = useMemo(() => {
+    const varMap = new Map<string, "word" | "xlsx" | "both">();
+    if (selectedWord) {
+      for (const p of selectedWord.placeholders) {
+        varMap.set(p, "word");
+      }
+    }
+    if (selectedXlsx) {
+      for (const p of selectedXlsx.placeholders) {
+        varMap.set(p, varMap.has(p) ? "both" : "xlsx");
+      }
+    }
+    return varMap;
+  }, [selectedWord, selectedXlsx]);
+
   return (
     <div className="flex flex-col gap-6 w-full max-w-lg mx-auto">
-      {/* Word template (required) */}
+      {/* Helper text */}
+      <p className="text-sm text-[#a1a1aa]">
+        Seleccione al menos una plantilla. Puede usar Word, Excel o ambas.
+      </p>
+
+      {/* Word template */}
       <div>
         <label
           htmlFor="word-template-select"
           className="block text-sm font-medium text-[#f5f5f5] mb-2"
         >
-          Plantilla Word (.docx) <span className="text-red-400">*</span>
+          Plantilla Word (.docx)
         </label>
         <select
           id="word-template-select"
@@ -115,13 +135,12 @@ function TemplateSelector({
           onChange={(e) => {
             const t = wordTemplates.find((wt) => wt.id === e.target.value) || null;
             onSelectWord(t);
-            if (!t) onSelectXlsx(null);
           }}
           className="w-full rounded-lg border border-[#a1a1aa]/30 bg-[#1a1025] px-4 py-2.5
             text-sm text-[#f5f5f5] focus:outline-none focus:ring-2 focus:ring-[#a855f7]
             focus:border-[#a855f7] transition-colors"
         >
-          <option value="">Seleccione una plantilla Word...</option>
+          <option value="">Sin plantilla Word</option>
           {wordTemplates.map((t) => (
             <option key={t.id} value={t.id}>
               {t.fileName} ({t.placeholders.length} variables)
@@ -130,14 +149,14 @@ function TemplateSelector({
         </select>
       </div>
 
-      {/* XLSX template (optional, shown after Word selected) */}
-      {selectedWord && xlsxTemplates.length > 0 && (
+      {/* XLSX template (always visible) */}
+      {xlsxTemplates.length > 0 && (
         <div>
           <label
             htmlFor="xlsx-template-select"
             className="block text-sm font-medium text-[#f5f5f5] mb-2"
           >
-            Plantilla Excel (.xlsx) <span className="text-[#a1a1aa]">(opcional)</span>
+            Plantilla Excel (.xlsx)
           </label>
           <select
             id="xlsx-template-select"
@@ -160,19 +179,38 @@ function TemplateSelector({
         </div>
       )}
 
-      {/* Template info */}
-      {selectedWord && (
+      {/* Template info — combined variables from both templates */}
+      {combinedPlaceholders.size > 0 && (
         <div className="rounded-lg border border-[#a855f7]/20 bg-[#1a1025] p-4">
           <h4 className="text-sm font-medium text-[#f5f5f5] mb-2">
-            Variables de la plantilla
+            Variables de las plantillas seleccionadas
           </h4>
           <div className="flex flex-wrap gap-2">
-            {selectedWord.placeholders.map((p) => (
+            {Array.from(combinedPlaceholders.entries()).map(([name, source]) => (
               <span
-                key={p}
-                className="inline-block rounded-full bg-[#a855f7]/10 px-3 py-1 text-xs text-[#c084fc]"
+                key={name}
+                className={`inline-block rounded-full px-3 py-1 text-xs ${
+                  source === "both"
+                    ? "bg-[#a855f7]/20 text-[#e9d5ff]"
+                    : source === "xlsx"
+                      ? "bg-emerald-500/10 text-emerald-400"
+                      : "bg-[#a855f7]/10 text-[#c084fc]"
+                }`}
+                title={
+                  source === "both"
+                    ? "Variable en Word y Excel"
+                    : source === "xlsx"
+                      ? "Variable solo en Excel"
+                      : "Variable solo en Word"
+                }
               >
-                {p}
+                {name}
+                {source === "both" && (
+                  <span className="ml-1 text-[0.6rem] opacity-70">W+X</span>
+                )}
+                {source === "xlsx" && (
+                  <span className="ml-1 text-[0.6rem] opacity-70">X</span>
+                )}
               </span>
             ))}
           </div>
@@ -235,13 +273,27 @@ export default function DigitizePage() {
     }
   }, [wordTemplates.length, loadTemplates]);
 
-  // Derive available variables from selected Word template
+  // Derive available variables from both selected templates (Word + XLSX)
   const availableVariables: Variable[] = useMemo(() => {
-    if (!selectedWordTemplate) return [];
-    const xlsxPlaceholders = selectedXlsxTemplate?.placeholders || [];
-    return selectedWordTemplate.placeholders.map((name) => ({
+    if (!selectedWordTemplate && !selectedXlsxTemplate) return [];
+
+    const varMap = new Map<string, "word" | "xlsx" | "both">();
+
+    if (selectedWordTemplate) {
+      for (const name of selectedWordTemplate.placeholders) {
+        varMap.set(name, "word");
+      }
+    }
+
+    if (selectedXlsxTemplate) {
+      for (const name of selectedXlsxTemplate.placeholders) {
+        varMap.set(name, varMap.has(name) ? "both" : "xlsx");
+      }
+    }
+
+    return Array.from(varMap.entries()).map(([name, source]) => ({
       name,
-      source: xlsxPlaceholders.includes(name) ? "both" as const : "word" as const,
+      source,
       assigned: areas.some((a) => a.variableName === name),
     }));
   }, [selectedWordTemplate, selectedXlsxTemplate, areas]);
@@ -277,51 +329,13 @@ export default function DigitizePage() {
     setCorrectedCanvas(null);
   }, [setCurrentDocument]);
 
-  // Step 2: Perspective accepted → go to filter
-  const handlePerspectiveAccept = useCallback(
-    (_correctedBlob: Blob, canvas: HTMLCanvasElement) => {
-      setCorrectedCanvas(canvas);
-      setCurrentStep(3); // filter step
-    },
-    [setCurrentStep]
-  );
-
-  // Step 2: Perspective rejected → back to capture
-  const handlePerspectiveReject = useCallback(() => {
-    setCapturedBlob(null);
-    setCorrectedCanvas(null);
-    setCurrentStep(1);
-  }, [setCurrentStep]);
-
-  // Step 2: Perspective skipped → use original blob as canvas, go to filter
-  const handlePerspectiveSkip = useCallback(() => {
-    if (!capturedBlob) return;
-    // Create canvas from original blob
-    const img = new Image();
-    const url = URL.createObjectURL(capturedBlob);
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.drawImage(img, 0, 0);
-      }
-      setCorrectedCanvas(canvas);
-      setCurrentStep(3);
-      URL.revokeObjectURL(url);
-    };
-    img.src = url;
-  }, [capturedBlob, setCurrentStep]);
-
-  // Step 3: Filter confirmed → upload processed image → init workspace → redirect
-  const handleFilterConfirm = useCallback(
-    async (filteredBlob: Blob, _filteredCanvas: HTMLCanvasElement) => {
-      if (!selectedWordTemplate) return;
+  // Auto-apply filter → upload processed image → init workspace → redirect
+  const handleFilterConfirmDirect = useCallback(
+    async (filteredBlob: Blob) => {
+      if (!selectedWordTemplate && !selectedXlsxTemplate) return;
       setRedirectingToWorkspace(true);
 
       try {
-        // Upload processed image to /api/upload
         const formData = new FormData();
         const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
         const fileName = `procesada-${timestamp}.jpg`;
@@ -329,22 +343,15 @@ export default function DigitizePage() {
         formData.append("type", "source");
         formData.append("fileName", fileName);
 
-        const response = await fetch("/api/upload", {
-          method: "POST",
-          body: formData,
-        });
-
+        const response = await fetch("/api/upload", { method: "POST", body: formData });
         if (!response.ok) {
           const data = await response.json().catch(() => null);
-          const msg = data?.error?.message || "Error al cargar la imagen procesada";
-          addToast({ type: "error", message: msg });
+          addToast({ type: "error", message: data?.error?.message || "Error al cargar la imagen procesada" });
           setRedirectingToWorkspace(false);
           return;
         }
 
         const result = await response.json();
-
-        // Convertir blob a data URL (sobrevive navegación y localStorage, a diferencia de blob URLs)
         const imageUrl = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onloadend = () => resolve(reader.result as string);
@@ -352,10 +359,8 @@ export default function DigitizePage() {
           reader.readAsDataURL(filteredBlob);
         });
 
-        // Init workspace with selected templates
-        initWorkspace(selectedWordTemplate, selectedXlsxTemplate);
-
-        // Add first page
+        const primaryTemplate = selectedWordTemplate || selectedXlsxTemplate!;
+        initWorkspace(primaryTemplate, selectedWordTemplate ? selectedXlsxTemplate : null);
         addPage({
           id: `page-${Date.now()}`,
           imageS3Key: result.s3Key,
@@ -366,24 +371,71 @@ export default function DigitizePage() {
           status: "pending",
         });
 
-        // Redirect to workspace
         router.push("/workspace");
       } catch {
-        addToast({
-          type: "error",
-          message: "Error al procesar la imagen. Verifique su conexión e intente nuevamente",
-        });
+        addToast({ type: "error", message: "Error al procesar la imagen. Verifique su conexión e intente nuevamente" });
         setRedirectingToWorkspace(false);
       }
     },
     [selectedWordTemplate, selectedXlsxTemplate, addToast, initWorkspace, addPage, router]
   );
 
-  // Step 3: Filter cancelled → back to perspective
-  const handleFilterCancel = useCallback(() => {
+  // Step 2: Perspective accepted → auto-apply grayscaleWhiteEnhance and proceed to workspace
+  const handlePerspectiveAccept = useCallback(
+    async (_correctedBlob: Blob, canvas: HTMLCanvasElement) => {
+      setCorrectedCanvas(canvas);
+      setCurrentStep(3);
+      setRedirectingToWorkspace(true);
+
+      try {
+        const { applyFilter } = await import("@/utils/imageFilters");
+        const { blob } = await applyFilter(canvas, "grayscaleWhiteEnhance");
+        await handleFilterConfirmDirect(blob);
+      } catch {
+        addToast({ type: "error", message: "Error al aplicar el filtro de mejora" });
+        setRedirectingToWorkspace(false);
+        setCurrentStep(2);
+      }
+    },
+    [setCurrentStep, addToast, handleFilterConfirmDirect]
+  );
+
+  // Step 2: Perspective rejected → back to capture
+  const handlePerspectiveReject = useCallback(() => {
+    setCapturedBlob(null);
     setCorrectedCanvas(null);
-    setCurrentStep(2);
+    setCurrentStep(1);
   }, [setCurrentStep]);
+
+  // Step 2: Perspective skipped → use original blob, auto-apply filter, proceed to workspace
+  const handlePerspectiveSkip = useCallback(() => {
+    if (!capturedBlob) return;
+    setCurrentStep(3);
+    setRedirectingToWorkspace(true);
+
+    const img = new Image();
+    const url = URL.createObjectURL(capturedBlob);
+    img.onload = async () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext("2d");
+      if (ctx) ctx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+      setCorrectedCanvas(canvas);
+
+      try {
+        const { applyFilter } = await import("@/utils/imageFilters");
+        const { blob } = await applyFilter(canvas, "grayscaleWhiteEnhance");
+        await handleFilterConfirmDirect(blob);
+      } catch {
+        addToast({ type: "error", message: "Error al aplicar el filtro de mejora" });
+        setRedirectingToWorkspace(false);
+        setCurrentStep(2);
+      }
+    };
+    img.src = url;
+  }, [capturedBlob, setCurrentStep, addToast, handleFilterConfirmDirect]);
 
   const handleAreasChange = useCallback(
     (newAreas: typeof areas) => {
@@ -558,7 +610,7 @@ export default function DigitizePage() {
                     <Button
                       variant="primary"
                       size="md"
-                      disabled={!selectedWordTemplate}
+                      disabled={!selectedWordTemplate && !selectedXlsxTemplate}
                       onClick={() => setCurrentStep(1)}
                     >
                       Continuar
@@ -623,39 +675,13 @@ export default function DigitizePage() {
             </div>
           )}
 
-          {/* Step 3: Filter Selection */}
-          {currentStep === 3 && correctedCanvas && (
-            <div className="flex flex-col gap-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-[#f5f5f5]">
-                  Filtro de mejora
-                </h2>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleFilterCancel}
-                >
-                  Atrás
-                </Button>
-              </div>
+          {/* Step 3: Auto-applying filter (loading only) */}
+          {currentStep === 3 && (
+            <div className="flex flex-col items-center justify-center py-12 gap-4">
+              <LoadingSpinner size="lg" message="Aplicando mejora de imagen..." />
               <p className="text-sm text-[#a1a1aa]">
-                Seleccione un filtro para mejorar la legibilidad del documento,
-                o confirme &quot;Original&quot; para mantener la imagen sin cambios.
+                Aplicando filtro de escala de grises y mejora de blancos
               </p>
-              {redirectingToWorkspace ? (
-                <div className="flex flex-col items-center justify-center py-12 gap-4">
-                  <LoadingSpinner size="lg" message="Preparando espacio de trabajo..." />
-                  <p className="text-sm text-[#a1a1aa]">
-                    Subiendo imagen procesada y configurando el workspace
-                  </p>
-                </div>
-              ) : (
-                <FilterSelector
-                  sourceCanvas={correctedCanvas}
-                  onConfirm={handleFilterConfirm}
-                  onCancel={handleFilterCancel}
-                />
-              )}
             </div>
           )}
 

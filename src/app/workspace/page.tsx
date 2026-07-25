@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useCallback, useRef, useState } from "react";
+import { v4 as uuidv4 } from "uuid";
 import { useAppStore } from "@/store/useAppStore";
 import { useWorkspaceCache } from "@/hooks/useWorkspaceCache";
 import Button from "@/components/ui/Button";
@@ -38,10 +39,99 @@ export default function WorkspacePage() {
   const addZone = useAppStore((s) => s.addZone);
   const removeZone = useAppStore((s) => s.removeZone);
   const propagateZones = useAppStore((s) => s.propagateZones);
+  const addPage = useAppStore((s) => s.addPage);
+  const removePage = useAppStore((s) => s.removePage);
 
   // Integración de caché de imágenes y OCR para el workspace
   const { loadPageImage, getCachedOcrResults, setCachedOcrResults, refilterLocally } = useWorkspaceCache();
   const [cachedImageUrls, setCachedImageUrls] = useState<Record<string, string>>({});
+
+  // Ref y handler para "Agregar página"
+  const addPageInputRef = useRef<HTMLInputElement>(null);
+  const [addingPage, setAddingPage] = useState(false);
+
+  const handleAddPageClick = useCallback(() => {
+    addPageInputRef.current?.click();
+  }, []);
+
+  const handleAddPageFile = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      setAddingPage(true);
+      try {
+        // Create canvas from file and apply grayscaleWhiteEnhance filter
+        const img = new Image();
+        const tempUrl = URL.createObjectURL(file);
+        const filteredBlob = await new Promise<Blob>((resolve, reject) => {
+          img.onload = async () => {
+            URL.revokeObjectURL(tempUrl);
+            const canvas = document.createElement("canvas");
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) { reject(new Error("No canvas context")); return; }
+            ctx.drawImage(img, 0, 0);
+            try {
+              const { applyFilter } = await import("@/utils/imageFilters");
+              const { blob } = await applyFilter(canvas, "grayscaleWhiteEnhance");
+              resolve(blob);
+            } catch (err) { reject(err); }
+          };
+          img.onerror = () => { URL.revokeObjectURL(tempUrl); reject(new Error("Image load failed")); };
+          img.src = tempUrl;
+        });
+
+        // Upload filtered image to /api/upload
+        const formData = new FormData();
+        formData.append("file", filteredBlob, file.name);
+        formData.append("type", "source");
+        formData.append("fileName", file.name);
+
+        const uploadResponse = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!uploadResponse.ok) {
+          addToast({ type: "error", message: "Error al subir la imagen" });
+          return;
+        }
+
+        const uploadData = await uploadResponse.json();
+
+        // Convert filtered blob to data URL
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error("Error al leer archivo"));
+          reader.readAsDataURL(filteredBlob);
+        });
+
+        addPage({
+          id: uuidv4(),
+          imageS3Key: uploadData.s3Key,
+          imageUrl: dataUrl,
+          zones: [],
+          record: {},
+          ocrProcessed: false,
+          status: "pending",
+        });
+
+        addToast({ type: "success", message: "Página agregada exitosamente" });
+      } catch {
+        addToast({ type: "error", message: "Error al agregar la página" });
+      } finally {
+        setAddingPage(false);
+        // Reset input so the same file can be selected again
+        if (addPageInputRef.current) {
+          addPageInputRef.current.value = "";
+        }
+      }
+    },
+    [addPage, addToast]
+  );
 
   // Sync auth on mount (middleware handles real auth)
   useEffect(() => {
@@ -95,8 +185,6 @@ export default function WorkspacePage() {
       return;
     }
 
-    autoSaveIntervalRef.current = setInterval(handlePersist, 30_000);
-
     return () => {
       if (autoSaveIntervalRef.current) {
         clearInterval(autoSaveIntervalRef.current);
@@ -105,16 +193,16 @@ export default function WorkspacePage() {
     };
   }, [workspaceActive, handlePersist]);
 
-  // Save workspace state before page unload + warn about unsaved changes
+  // Clear workspace state when page/tab closes or URL changes
   useEffect(() => {
     if (!workspaceActive) return;
 
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      persistToLocalStorage();
-      // Trigger browser's native "unsaved changes" confirmation
-      if (pages.length > 0) {
-        e.preventDefault();
-        e.returnValue = "Tiene cambios sin guardar. ¿Está seguro que desea salir?";
+    const handleBeforeUnload = () => {
+      // Limpiar workspace de localStorage al cerrar/salir
+      try {
+        localStorage.removeItem('workspace-session-state');
+      } catch {
+        // Silently fail
       }
     };
 
@@ -122,7 +210,7 @@ export default function WorkspacePage() {
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [workspaceActive, persistToLocalStorage, pages.length]);
+  }, [workspaceActive]);
 
   // Cargar imágenes de páginas usando caché (Req 1.5, 1.6)
   const loadedPageIdsRef = useRef<Set<string>>(new Set());
@@ -335,7 +423,23 @@ export default function WorkspacePage() {
                       }
                     }}
                   >
-                    <span className="text-[#f5f5f5]">Pág. {page.pageNumber}</span>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[#f5f5f5]">Pág. {page.pageNumber}</span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removePage(page.id);
+                        }}
+                        className="text-[#a1a1aa] hover:text-red-400 transition-colors p-0.5"
+                        aria-label={`Eliminar página ${page.pageNumber}`}
+                        title="Eliminar página"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
                     <span className={`block mt-0.5 ${
                       page.status === "completed" ? "text-green-400" :
                       page.status === "processing" ? "text-yellow-400" :
@@ -351,6 +455,40 @@ export default function WorkspacePage() {
                 ))
               )}
             </div>
+
+            {/* Agregar página */}
+            <button
+              type="button"
+              onClick={handleAddPageClick}
+              disabled={addingPage}
+              className="mt-3 w-full flex items-center justify-center gap-1.5 rounded-lg border border-purple-500/30 bg-[#a855f7]/10 px-3 py-2 text-xs font-medium text-[#a855f7] hover:bg-[#a855f7]/20 hover:border-purple-500/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {addingPage ? (
+                <span>Subiendo...</span>
+              ) : (
+                <>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-3.5 w-3.5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  <span>Agregar página</span>
+                </>
+              )}
+            </button>
+            <input
+              ref={addPageInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleAddPageFile}
+              aria-label="Seleccionar imagen para nueva página"
+            />
           </div>
         </aside>
 

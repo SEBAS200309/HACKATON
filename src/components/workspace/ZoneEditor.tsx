@@ -211,7 +211,7 @@ export default function ZoneEditor({
       {/* Helper text */}
       <p className="text-xs text-[#a1a1aa]">
         Dibuje rectángulos sobre el documento para definir zonas de escaneo.
-        Use Delete para eliminar la zona seleccionada.
+        Seleccione una zona y pulse la tecla Supr (Delete) para eliminarla.
       </p>
 
       {/* Propagation buttons — only visible when zones exist */}

@@ -72,6 +72,33 @@ export default function SessionToolbar({ onResetConfirmed }: SessionToolbarProps
         type: "success",
         message: `Sesión guardada exitosamente (ID: ${data.sessionId})`,
       });
+
+      // Auto-guardar configuración de zonas para que aparezca en "Cargar configuración"
+      const pageWithZones = pages.find((p) => p.zones.length > 0);
+      if (pageWithZones && activeTemplate) {
+        try {
+          const timestamp = Date.now();
+          await fetch("/api/configs", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              templateId: activeTemplate.id,
+              configName: `autosave-${timestamp}`,
+              areas: pageWithZones.zones.map((z) => ({
+                id: z.id,
+                x: z.x,
+                y: z.y,
+                width: z.width,
+                height: z.height,
+                variableName: z.variableName,
+                color: z.color,
+              })),
+            }),
+          });
+        } catch {
+          // Silently fail — la sesión ya se guardó, esto es un bonus
+        }
+      }
     } catch {
       addToast({ type: "error", message: "Error de conexión al guardar la sesión" });
     } finally {

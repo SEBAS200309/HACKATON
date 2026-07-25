@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useCallback, useRef, useState } from "react";
+import { v4 as uuidv4 } from "uuid";
 import { useAppStore } from "@/store/useAppStore";
 import { useWorkspaceCache } from "@/hooks/useWorkspaceCache";
 import Button from "@/components/ui/Button";
@@ -38,10 +39,76 @@ export default function WorkspacePage() {
   const addZone = useAppStore((s) => s.addZone);
   const removeZone = useAppStore((s) => s.removeZone);
   const propagateZones = useAppStore((s) => s.propagateZones);
+  const addPage = useAppStore((s) => s.addPage);
 
   // Integración de caché de imágenes y OCR para el workspace
   const { loadPageImage, getCachedOcrResults, setCachedOcrResults, refilterLocally } = useWorkspaceCache();
   const [cachedImageUrls, setCachedImageUrls] = useState<Record<string, string>>({});
+
+  // Ref y handler para "Agregar página"
+  const addPageInputRef = useRef<HTMLInputElement>(null);
+  const [addingPage, setAddingPage] = useState(false);
+
+  const handleAddPageClick = useCallback(() => {
+    addPageInputRef.current?.click();
+  }, []);
+
+  const handleAddPageFile = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      setAddingPage(true);
+      try {
+        // Upload to /api/upload
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("type", "source");
+        formData.append("fileName", file.name);
+
+        const uploadResponse = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!uploadResponse.ok) {
+          addToast({ type: "error", message: "Error al subir la imagen" });
+          return;
+        }
+
+        const uploadData = await uploadResponse.json();
+
+        // Convert to data URL
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error("Error al leer archivo"));
+          reader.readAsDataURL(file);
+        });
+
+        addPage({
+          id: uuidv4(),
+          imageS3Key: uploadData.s3Key,
+          imageUrl: dataUrl,
+          zones: [],
+          record: {},
+          ocrProcessed: false,
+          status: "pending",
+        });
+
+        addToast({ type: "success", message: "Página agregada exitosamente" });
+      } catch {
+        addToast({ type: "error", message: "Error de conexión al agregar la página" });
+      } finally {
+        setAddingPage(false);
+        // Reset input so the same file can be selected again
+        if (addPageInputRef.current) {
+          addPageInputRef.current.value = "";
+        }
+      }
+    },
+    [addPage, addToast]
+  );
 
   // Sync auth on mount (middleware handles real auth)
   useEffect(() => {
@@ -351,6 +418,40 @@ export default function WorkspacePage() {
                 ))
               )}
             </div>
+
+            {/* Agregar página */}
+            <button
+              type="button"
+              onClick={handleAddPageClick}
+              disabled={addingPage}
+              className="mt-3 w-full flex items-center justify-center gap-1.5 rounded-lg border border-purple-500/30 bg-[#a855f7]/10 px-3 py-2 text-xs font-medium text-[#a855f7] hover:bg-[#a855f7]/20 hover:border-purple-500/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {addingPage ? (
+                <span>Subiendo...</span>
+              ) : (
+                <>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-3.5 w-3.5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  <span>Agregar página</span>
+                </>
+              )}
+            </button>
+            <input
+              ref={addPageInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleAddPageFile}
+              aria-label="Seleccionar imagen para nueva página"
+            />
           </div>
         </aside>
 

@@ -33,6 +33,15 @@ export async function POST(request: Request) {
       );
     }
 
+    // Validate documentKey is a sources/ path with no traversal
+    if (!documentKey.startsWith('sources/') || documentKey.includes('..')) {
+      return createErrorResponse(
+        'OCR_FAILED',
+        'La clave del documento no es válida',
+        400
+      );
+    }
+
     // Validar que areas sea un array no vacío
     if (!Array.isArray(areas) || areas.length === 0) {
       return createErrorResponse(
@@ -40,6 +49,23 @@ export async function POST(request: Request) {
         'El campo areas debe ser un array no vacío',
         400
       );
+    }
+
+    // Validate each area has required fields
+    for (const area of areas) {
+      if (
+        typeof area.x !== 'number' || typeof area.y !== 'number' ||
+        typeof area.width !== 'number' || typeof area.height !== 'number' ||
+        !area.variableName || typeof area.variableName !== 'string' ||
+        area.x < 0 || area.y < 0 || area.width <= 0 || area.height <= 0 ||
+        area.x + area.width > 1.01 || area.y + area.height > 1.01
+      ) {
+        return createErrorResponse(
+          'OCR_FAILED',
+          'Las áreas contienen valores inválidos. Las coordenadas deben estar entre 0 y 1',
+          400
+        );
+      }
     }
 
     // Ejecutar OCR con timeout de 60 segundos
@@ -76,11 +102,11 @@ export async function POST(request: Request) {
       );
     }
 
-    // Error genérico de OCR — incluir detalle del error
+    // Error genérico de OCR
     console.error('OCR processing error:', errorMessage);
     return createErrorResponse(
       'OCR_FAILED',
-      `Error en el procesamiento OCR: ${errorMessage}`,
+      'Error en el procesamiento OCR. Verifique la calidad del documento e intente nuevamente',
       502,
       true
     );

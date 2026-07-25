@@ -222,7 +222,23 @@ export const useAppStore = create<AppState>()((set, get) => ({
   },
 
   logout: () => {
-    set({ isAuthenticated: false });
+    // Clear workspace state from localStorage
+    try {
+      localStorage.removeItem('workspace-session-state');
+    } catch {
+      // Silently fail
+    }
+    set({
+      isAuthenticated: false,
+      workspaceActive: false,
+      activeTemplate: null,
+      activeXlsxTemplate: null,
+      pages: [],
+      currentPageId: null,
+      availableVariables: [],
+      batchProgress: null,
+      generatedFiles: [],
+    });
   },
 
   // ─── Templates slice ──────────────────────────────────────────────────────

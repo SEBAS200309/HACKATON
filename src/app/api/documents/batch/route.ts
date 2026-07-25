@@ -36,6 +36,16 @@ export async function POST(request: Request) {
       );
     }
 
+    // Limit records to prevent DoS
+    const MAX_BATCH_RECORDS = 100;
+    if (records.length > MAX_BATCH_RECORDS) {
+      return createErrorResponse(
+        'BATCH_FAILED',
+        `El lote excede el máximo de ${MAX_BATCH_RECORDS} registros`,
+        400
+      );
+    }
+
     // Obtener metadata de plantillas desde templates/index.json
     const templatesIndex = (await storageService.getJsonIndex('templates')) as TemplateMetadata[];
 

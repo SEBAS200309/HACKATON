@@ -294,52 +294,79 @@ class TesseractOcrService implements OcrService {
   }
 
   /**
-   * Orquesta el flujo completo de OCR:
+   * Orquesta el flujo completo de OCR usando Rectangle Mode:
+   * Para cada zona, ejecuta OCR solo en esa región específica de la imagen.
+   * Esto da máxima precisión porque Tesseract solo analiza el texto dentro del recuadro.
+   * 
+   * Flujo:
    * 1. Obtener imagen del documento desde S3
-   * 2. Ejecutar OCR con Tesseract.js (una sola llamada)
-   * 3. Filtrar bloques por cada área de interés
-   * 4. Concatenar palabras en orden de lectura (top-to-bottom, left-to-right)
-   * 5. Calcular confianza promedio por área
+   * 2. Obtener dimensiones de la imagen
+   * 3. Para cada zona: convertir coordenadas (0-1) a pixels, llamar recognize con rectangle
+   * 4. Extraer texto directamente del resultado
    */
   async processDocument(documentKey: string, areas: AreaOfInterest[]): Promise<OcrResult[]> {
     try {
       // 1. Obtener imagen desde S3
       const imageBytes = await storageService.getObject(documentKey);
 
-      // 2. Llamar a Tesseract una sola vez con el documento completo
-      const allBlocks = await this.detectText(imageBytes, documentKey);
+      // 2. Obtener dimensiones reales de la imagen
+      const dimensions = getImageDimensions(imageBytes);
 
-      // 3-5. Procesar cada área
-      const results: OcrResult[] = areas.map((area) => {
-        // Filtrar bloques WORD que se superponen con el área
-        const areaBlocks = this.filterBlocksByArea(allBlocks, area);
+      // 3. Inicializar worker
+      const worker = await initialize();
 
-        // Ordenar en orden de lectura: top-to-bottom, left-to-right
-        const sortedBlocks = [...areaBlocks].sort((a, b) => {
-          const topDiff = a.boundingBox.top - b.boundingBox.top;
-          // Si la diferencia vertical es mínima (misma línea), ordenar por left
-          if (Math.abs(topDiff) < 0.005) {
-            return a.boundingBox.left - b.boundingBox.left;
-          }
-          return topDiff;
-        });
+      // 4. Procesar cada zona individualmente usando rectangle
+      const results: OcrResult[] = [];
 
-        // Concatenar texto de las palabras ordenadas
-        const extractedText = sortedBlocks
-          .map((block) => block.text || '')
-          .filter((text) => text.length > 0)
-          .join(' ');
+      for (const area of areas) {
+        try {
+          // Convertir coordenadas normalizadas (0-1) a pixels
+          const left = Math.round(area.x * dimensions.width);
+          const top = Math.round(area.y * dimensions.height);
+          const width = Math.round(area.width * dimensions.width);
+          const height = Math.round(area.height * dimensions.height);
 
-        // Calcular confianza promedio
-        const confidence = this.calculateAreaConfidence(areaBlocks);
+          // Asegurar que las coordenadas sean válidas
+          const clampedLeft = Math.max(0, Math.min(left, dimensions.width - 1));
+          const clampedTop = Math.max(0, Math.min(top, dimensions.height - 1));
+          const clampedWidth = Math.max(1, Math.min(width, dimensions.width - clampedLeft));
+          const clampedHeight = Math.max(1, Math.min(height, dimensions.height - clampedTop));
 
-        return {
-          variableName: area.variableName,
-          extractedText,
-          confidence,
-          wordCount: sortedBlocks.filter((b) => b.text && b.text.length > 0).length,
-        };
-      });
+          // OCR solo en la región del recuadro
+          const result: Tesseract.RecognizeResult = await withTimeout(
+            worker.recognize(imageBytes, {
+              rectangle: {
+                left: clampedLeft,
+                top: clampedTop,
+                width: clampedWidth,
+                height: clampedHeight,
+              },
+            }),
+            OCR_TIMEOUT_MS
+          );
+
+          // Extraer texto directamente (ya es solo de la zona)
+          const extractedText = (result.data.text || '').trim();
+          const confidence = result.data.confidence || 0;
+          const wordCount = result.data.words?.length || 0;
+
+          results.push({
+            variableName: area.variableName,
+            extractedText,
+            confidence,
+            wordCount,
+          });
+        } catch (areaError) {
+          // Si falla una zona, continuar con las demás y reportar texto vacío
+          console.error(`Error procesando zona ${area.variableName}:`, areaError);
+          results.push({
+            variableName: area.variableName,
+            extractedText: '',
+            confidence: 0,
+            wordCount: 0,
+          });
+        }
+      }
 
       return results;
     } catch (error) {

@@ -3,7 +3,7 @@ const nextConfig = {
   output: 'standalone',
   allowedDevOrigins: ["http://192.168.40.14:3000"],
   experimental: {
-    serverComponentsExternalPackages: ['tesseract.js'],
+    serverComponentsExternalPackages: ['tesseract.js', 'sharp'],
   },
   webpack: (config, { isServer }) => {
     if (isServer) {

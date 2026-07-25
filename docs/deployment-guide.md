@@ -184,10 +184,12 @@ Las variables de entorno son **críticas** — sin ellas, la aplicación no pued
 | Variable | Ejemplo | Descripción |
 |----------|---------|-------------|
 | `DEMO_PASSWORD` | `MiPassword2025!` | Contraseña para acceder a la aplicación |
-| `AWS_REGION` | `us-east-1` | Región donde está tu bucket S3 |
-| `AWS_ACCESS_KEY_ID` | *(tu access key)* | Access Key del usuario IAM |
-| `AWS_SECRET_ACCESS_KEY` | *(tu secret key)* | Secret Key del usuario IAM |
-| `S3_BUCKET_NAME` | `mi-bucket-docs` | Nombre exacto del bucket S3 |
+| `MY_AWS_REGION` | `us-east-1` | Región donde está tu bucket S3 |
+| `MY_AWS_ACCESS_KEY_ID` | *(tu access key)* | Access Key del usuario IAM |
+| `MY_AWS_SECRET_ACCESS_KEY` | *(tu secret key)* | Secret Key del usuario IAM |
+| `MY_S3_BUCKET_NAME` | `mi-bucket-docs` | Nombre exacto del bucket S3 |
+
+> **Nota:** Amplify no permite variables de entorno que empiecen con `AWS_` (es un prefijo reservado). Por eso usamos el prefijo `MY_`. La aplicación lee ambas versiones: primero `AWS_*` (para desarrollo local con `.env.local`) y como fallback `MY_*` (para Amplify).
 
 ### Instrucciones:
 

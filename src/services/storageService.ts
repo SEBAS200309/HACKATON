@@ -33,12 +33,12 @@ class S3StorageService implements StorageService {
   private bucketName: string;
 
   constructor() {
-    this.bucketName = process.env.S3_BUCKET_NAME || '';
+    this.bucketName = process.env.S3_BUCKET_NAME || process.env.MY_S3_BUCKET_NAME || '';
     this.client = new S3Client({
-      region: process.env.AWS_REGION || 'us-east-1',
+      region: process.env.AWS_REGION || process.env.MY_AWS_REGION || 'us-east-1',
       credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID || process.env.MY_AWS_ACCESS_KEY_ID || '',
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || process.env.MY_AWS_SECRET_ACCESS_KEY || '',
       },
     });
   }

@@ -40,6 +40,7 @@ export default function WorkspacePage() {
   const removeZone = useAppStore((s) => s.removeZone);
   const propagateZones = useAppStore((s) => s.propagateZones);
   const addPage = useAppStore((s) => s.addPage);
+  const removePage = useAppStore((s) => s.removePage);
 
   // Integración de caché de imágenes y OCR para el workspace
   const { loadPageImage, getCachedOcrResults, setCachedOcrResults, refilterLocally } = useWorkspaceCache();
@@ -60,9 +61,31 @@ export default function WorkspacePage() {
 
       setAddingPage(true);
       try {
-        // Upload to /api/upload
+        // Create canvas from file and apply grayscaleWhiteEnhance filter
+        const img = new Image();
+        const tempUrl = URL.createObjectURL(file);
+        const filteredBlob = await new Promise<Blob>((resolve, reject) => {
+          img.onload = async () => {
+            URL.revokeObjectURL(tempUrl);
+            const canvas = document.createElement("canvas");
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) { reject(new Error("No canvas context")); return; }
+            ctx.drawImage(img, 0, 0);
+            try {
+              const { applyFilter } = await import("@/utils/imageFilters");
+              const { blob } = await applyFilter(canvas, "grayscaleWhiteEnhance");
+              resolve(blob);
+            } catch (err) { reject(err); }
+          };
+          img.onerror = () => { URL.revokeObjectURL(tempUrl); reject(new Error("Image load failed")); };
+          img.src = tempUrl;
+        });
+
+        // Upload filtered image to /api/upload
         const formData = new FormData();
-        formData.append("file", file);
+        formData.append("file", filteredBlob, file.name);
         formData.append("type", "source");
         formData.append("fileName", file.name);
 
@@ -78,12 +101,12 @@ export default function WorkspacePage() {
 
         const uploadData = await uploadResponse.json();
 
-        // Convert to data URL
+        // Convert filtered blob to data URL
         const dataUrl = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onloadend = () => resolve(reader.result as string);
           reader.onerror = () => reject(new Error("Error al leer archivo"));
-          reader.readAsDataURL(file);
+          reader.readAsDataURL(filteredBlob);
         });
 
         addPage({
@@ -98,7 +121,7 @@ export default function WorkspacePage() {
 
         addToast({ type: "success", message: "Página agregada exitosamente" });
       } catch {
-        addToast({ type: "error", message: "Error de conexión al agregar la página" });
+        addToast({ type: "error", message: "Error al agregar la página" });
       } finally {
         setAddingPage(false);
         // Reset input so the same file can be selected again
@@ -162,8 +185,6 @@ export default function WorkspacePage() {
       return;
     }
 
-    autoSaveIntervalRef.current = setInterval(handlePersist, 30_000);
-
     return () => {
       if (autoSaveIntervalRef.current) {
         clearInterval(autoSaveIntervalRef.current);
@@ -172,16 +193,16 @@ export default function WorkspacePage() {
     };
   }, [workspaceActive, handlePersist]);
 
-  // Save workspace state before page unload + warn about unsaved changes
+  // Clear workspace state when page/tab closes or URL changes
   useEffect(() => {
     if (!workspaceActive) return;
 
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      persistToLocalStorage();
-      // Trigger browser's native "unsaved changes" confirmation
-      if (pages.length > 0) {
-        e.preventDefault();
-        e.returnValue = "Tiene cambios sin guardar. ¿Está seguro que desea salir?";
+    const handleBeforeUnload = () => {
+      // Limpiar workspace de localStorage al cerrar/salir
+      try {
+        localStorage.removeItem('workspace-session-state');
+      } catch {
+        // Silently fail
       }
     };
 
@@ -189,7 +210,7 @@ export default function WorkspacePage() {
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [workspaceActive, persistToLocalStorage, pages.length]);
+  }, [workspaceActive]);
 
   // Cargar imágenes de páginas usando caché (Req 1.5, 1.6)
   const loadedPageIdsRef = useRef<Set<string>>(new Set());
@@ -402,7 +423,23 @@ export default function WorkspacePage() {
                       }
                     }}
                   >
-                    <span className="text-[#f5f5f5]">Pág. {page.pageNumber}</span>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[#f5f5f5]">Pág. {page.pageNumber}</span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removePage(page.id);
+                        }}
+                        className="text-[#a1a1aa] hover:text-red-400 transition-colors p-0.5"
+                        aria-label={`Eliminar página ${page.pageNumber}`}
+                        title="Eliminar página"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
                     <span className={`block mt-0.5 ${
                       page.status === "completed" ? "text-green-400" :
                       page.status === "processing" ? "text-yellow-400" :

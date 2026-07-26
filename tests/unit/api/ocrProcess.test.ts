@@ -148,7 +148,7 @@ describe('POST /api/ocr/process', () => {
 
       expect(response.status).toBe(504);
       expect(data.error.code).toBe('OCR_TIMEOUT');
-      expect(data.error.message).toBe('El procesamiento OCR tardó demasiado. Intente nuevamente');
+      expect(data.error.message).toBe('El procesamiento OCR tardó demasiado. Intente con una imagen de menor resolución');
       expect(data.error.retryable).toBe(true);
     });
   });

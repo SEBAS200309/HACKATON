@@ -10,11 +10,15 @@ frontend:
         # Remove SWC binaries not needed in deployment
         - rm -f node_modules/@swc/core-linux-x64-gnu/swc.linux-x64-gnu.node
         - rm -f node_modules/@swc/core-linux-x64-musl/swc.linux-x64-musl.node
-        # Remove onnxruntime-node binaries for non-Linux platforms (saves ~154MB)
+        # Remove onnxruntime-node binaries for non-Linux-x64 platforms (saves ~190MB)
         - rm -rf .next/standalone/node_modules/onnxruntime-node/bin/napi-v6/darwin
         - rm -rf .next/standalone/node_modules/onnxruntime-node/bin/napi-v6/win32
+        - rm -rf .next/standalone/node_modules/onnxruntime-node/bin/napi-v6/linux/arm64
         # Remove unused tesseract.js-core WASM from standalone (saves ~29MB)
         - rm -rf .next/standalone/node_modules/tesseract.js-core
+        - rm -rf .next/standalone/node_modules/tesseract.js
+        # Remove unused @aws-sdk/client-textract from standalone
+        - rm -rf .next/standalone/node_modules/@aws-sdk/client-textract
         # Remove non-Linux @img/sharp platform packages if present
         - rm -rf .next/standalone/node_modules/@img/sharp-win32-*
         - rm -rf .next/standalone/node_modules/@img/sharp-darwin-*

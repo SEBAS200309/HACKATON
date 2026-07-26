@@ -52,7 +52,7 @@ const arbTemplateMetadata = (): fc.Arbitrary<TemplateMetadata> =>
       fc.stringMatching(/^[a-zA-Z][a-zA-Z0-9_]{0,14}$/),
       { minLength: 1, maxLength: 5 }
     ),
-    uploadDate: fc.date({ min: new Date('2024-01-01'), max: new Date('2025-12-31') }).map(
+    uploadDate: fc.date({ min: new Date('2024-01-01'), max: new Date('2025-12-31'), noInvalidDate: true }).map(
       (d) => d.toISOString()
     ),
   });

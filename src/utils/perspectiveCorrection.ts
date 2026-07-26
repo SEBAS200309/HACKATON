@@ -114,14 +114,13 @@ export function applyPerspectiveTransform(
   outputCtx.putImageData(outputImageData, 0, 0);
 
   // Generar Blob sincrónicamente usando toDataURL como fallback
-  let correctedBlob: Blob;
   const dataUrl = outputCanvas.toDataURL('image/png');
   const binaryStr = atob(dataUrl.split(',')[1]);
   const bytes = new Uint8Array(binaryStr.length);
   for (let i = 0; i < binaryStr.length; i++) {
     bytes[i] = binaryStr.charCodeAt(i);
   }
-  correctedBlob = new Blob([bytes], { type: 'image/png' });
+  const correctedBlob = new Blob([bytes], { type: 'image/png' });
 
   return {
     correctedCanvas: outputCanvas,

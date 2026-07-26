@@ -38,7 +38,7 @@ const arbColor = fc.stringMatching(/^#[0-9a-f]{6}$/);
 
 const arbVariableName = fc.stringMatching(/^[a-zA-Z][a-zA-Z0-9_]{0,14}$/);
 
-const arbWorkspaceZone = (variableName?: string): fc.Arbitrary<WorkspaceZone> =>
+const _arbWorkspaceZone = (variableName?: string): fc.Arbitrary<WorkspaceZone> =>
   fc.record({
     id: fc.uuid(),
     x: fc.double({ min: 0, max: 0.9, noNaN: true }),
@@ -103,7 +103,7 @@ describe('Feature: v2-scanner-optimization, Property 15: OCR produces exactly on
           const variableNames = [...new Set(rawVariableNames)];
           if (variableNames.length === 0) return; // skip degenerate case
 
-          const { pages, zones } = buildPagesWithZones(pageCount, variableNames);
+          const { pages } = buildPagesWithZones(pageCount, variableNames);
 
           // Simulate OCR processing: for each page, produce OcrResult[] from its zones
           const records: Record<string, string>[] = [];
@@ -252,7 +252,7 @@ describe('Feature: v2-scanner-optimization, Property 16: Batch generation output
                 records[i]
               );
               generatedFiles.push({ type: 'docx' });
-            } catch (error) {
+            } catch {
               errors.push({
                 recordIndex: i,
                 message: `Error en registro ${i}`,

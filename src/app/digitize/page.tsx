@@ -258,8 +258,8 @@ export default function DigitizePage() {
 
   // State for perspective + filter flow
   const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null);
-  const [correctedCanvas, setCorrectedCanvas] = useState<HTMLCanvasElement | null>(null);
-  const [redirectingToWorkspace, setRedirectingToWorkspace] = useState(false);
+  const [, setCorrectedCanvas] = useState<HTMLCanvasElement | null>(null);
+  const [, setRedirectingToWorkspace] = useState(false);
 
   // Sincronizar auth: si el middleware nos dejó pasar, estamos autenticados
   useEffect(() => {

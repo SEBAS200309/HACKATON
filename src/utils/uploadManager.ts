@@ -215,7 +215,7 @@ export class UploadManager {
   /**
    * Maneja errores de upload, implementando retry con exponential backoff.
    */
-  private handleUploadError(item: QueueItem, errorMessage: string): void {
+  private handleUploadError(item: QueueItem, _errorMessage: string): void {
     this.activeCount = Math.max(0, this.activeCount - 1);
 
     if (item.status === 'cancelled') {

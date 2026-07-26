@@ -43,7 +43,7 @@ export default function WorkspacePage() {
   const removePage = useAppStore((s) => s.removePage);
 
   // Integración de caché de imágenes y OCR para el workspace
-  const { loadPageImage, getCachedOcrResults, setCachedOcrResults, refilterLocally } = useWorkspaceCache();
+  const { loadPageImage } = useWorkspaceCache();
   const [cachedImageUrls, setCachedImageUrls] = useState<Record<string, string>>({});
 
   // Ref y handler para "Agregar página"

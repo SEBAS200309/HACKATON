@@ -5,7 +5,7 @@ describe('ImageCache', () => {
   let cache: ImageCache;
 
   // Mock URL.createObjectURL and revokeObjectURL
-  const mockCreateObjectURL = vi.fn((blob: Blob) => `blob:mock-${Math.random()}`);
+  const mockCreateObjectURL = vi.fn((_blob: Blob) => `blob:mock-${Math.random()}`);
   const mockRevokeObjectURL = vi.fn();
 
   beforeEach(() => {

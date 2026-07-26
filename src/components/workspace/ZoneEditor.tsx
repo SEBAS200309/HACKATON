@@ -8,11 +8,13 @@ import CanvasOverlay from "@/components/digitization/CanvasOverlay";
 export interface ZoneEditorProps {
   imageUrl: string;
   zones: WorkspaceZone[];
+  orientation: 'portrait' | 'landscape';
   availableVariables: Variable[];
   onZoneCreated: (zone: WorkspaceZone) => void;
   onZoneUpdated: (zoneId: string, updates: Partial<WorkspaceZone>) => void;
   onZoneDeleted: (zoneId: string) => void;
   onPropagateZones: (toAll: boolean) => void;
+  onToggleOrientation: () => void;
 }
 
 const AREA_COLORS = [
@@ -37,11 +39,13 @@ function getNextColor(zones: WorkspaceZone[]): string {
 export default function ZoneEditor({
   imageUrl,
   zones,
+  orientation,
   availableVariables,
   onZoneCreated,
   onZoneUpdated,
   onZoneDeleted,
   onPropagateZones,
+  onToggleOrientation,
 }: ZoneEditorProps) {
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
   const [showVariablePrompt, setShowVariablePrompt] = useState(false);
@@ -122,12 +126,39 @@ export default function ZoneEditor({
 
   return (
     <div className="flex flex-col gap-4">
+      {/* Toolbar con botón de orientación */}
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-[#a1a1aa]">
+          Dibuje rectángulos sobre el documento para definir zonas de escaneo.
+        </p>
+        <button
+          type="button"
+          onClick={onToggleOrientation}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-purple-500/30 text-purple-400 hover:bg-purple-500/10 hover:border-purple-500/50 transition-colors"
+          title={orientation === 'portrait' ? 'Cambiar a horizontal' : 'Cambiar a vertical'}
+          aria-label={orientation === 'portrait' ? 'Cambiar orientación a horizontal' : 'Cambiar orientación a vertical'}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className={`h-4 w-4 transition-transform ${orientation === 'landscape' ? 'rotate-90' : ''}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            aria-hidden="true"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          <span>{orientation === 'portrait' ? 'Horizontal' : 'Vertical'}</span>
+        </button>
+      </div>
+
       {/* Canvas section */}
       <div className="relative rounded-lg border border-gray-700 overflow-hidden bg-[#0f0a1a]">
         <CanvasOverlay
           imageUrl={imageUrl}
           areas={areasForCanvas}
           selectedAreaId={selectedZoneId}
+          orientation={orientation}
           onAreaCreated={handleAreaCreated}
           onAreaUpdated={handleAreaUpdated}
           onAreaDeleted={handleAreaDeleted}
@@ -207,12 +238,6 @@ export default function ZoneEditor({
           </div>
         )}
       </div>
-
-      {/* Helper text */}
-      <p className="text-xs text-[#a1a1aa]">
-        Dibuje rectángulos sobre el documento para definir zonas de escaneo.
-        Seleccione una zona y pulse la tecla Supr (Delete) para eliminarla.
-      </p>
 
       {/* Propagation buttons — only visible when zones exist */}
       {zones.length > 0 && (

@@ -77,6 +77,7 @@ function buildPagesWithZones(
     pageNumber: i + 1,
     imageS3Key: `sources/image${i}.png`,
     imageUrl: `https://example.com/image${i}.png`,
+    orientation: 'portrait' as const,
     zones,
     record: {},
     ocrProcessed: false,

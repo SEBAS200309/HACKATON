@@ -52,6 +52,7 @@ interface AppState {
   removePage: (pageId: string) => void;
   reorderPages: (fromIndex: number, toIndex: number) => void;
   setCurrentPage: (pageId: string) => void;
+  togglePageOrientation: (pageId: string) => void;
   addZone: (pageId: string, zone: WorkspaceZone) => void;
   removeZone: (pageId: string, zoneId: string) => void;
   propagateZones: (fromPageId: string, toAll: boolean) => void;
@@ -406,6 +407,25 @@ export const useAppStore = create<AppState>()((set, get) => ({
     set({ currentPageId: pageId });
   },
 
+  togglePageOrientation: (pageId) => {
+    set((state) => {
+      const newPages = state.pages.map((p) => {
+        if (p.id !== pageId) return p;
+        const newOrientation: 'portrait' | 'landscape' = p.orientation === 'landscape' ? 'portrait' : 'landscape';
+        // Reubicar zonas: intercambiar ejes x↔y y width↔height
+        const remappedZones = p.zones.map((z) => ({
+          ...z,
+          x: z.y,
+          y: z.x,
+          width: z.height,
+          height: z.width,
+        }));
+        return { ...p, orientation: newOrientation, zones: remappedZones };
+      });
+      return { pages: newPages };
+    });
+  },
+
   addZone: (pageId, zone) => {
     set((state) => {
       const newPages = state.pages.map((p) =>
@@ -639,7 +659,10 @@ export const useAppStore = create<AppState>()((set, get) => ({
         workspaceActive: data.workspaceActive,
         activeTemplate: data.activeTemplate ?? null,
         activeXlsxTemplate: data.activeXlsxTemplate ?? null,
-        pages: data.pages ?? [],
+        pages: (data.pages ?? []).map((p: WorkspacePage) => ({
+          ...p,
+          orientation: p.orientation ?? 'portrait',
+        })),
         currentPageId: data.currentPageId ?? null,
         availableVariables: data.availableVariables ?? [],
         generatedFiles: data.generatedFiles ?? [],

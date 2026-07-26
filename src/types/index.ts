@@ -93,6 +93,8 @@ export interface WorkspacePage {
   pageNumber: number;
   imageS3Key: string;
   imageUrl: string;
+  /** Orientación de visualización de la página: vertical u horizontal */
+  orientation: 'portrait' | 'landscape';
   zones: WorkspaceZone[];
   record: Record<string, string>;
   /** Múltiples registros extraídos de una sola página (para plantillas XLSX con columnas) */

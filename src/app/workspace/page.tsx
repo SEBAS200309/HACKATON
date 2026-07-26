@@ -54,6 +54,7 @@ export default function WorkspacePage() {
   const addPage = useAppStore((s) => s.addPage);
   const removePage = useAppStore((s) => s.removePage);
   const updateVariableSettings = useAppStore((s) => s.updateVariableSettings);
+  const togglePageOrientation = useAppStore((s) => s.togglePageOrientation);
 
   // Integración de caché de imágenes y OCR para el workspace
   const { loadPageImage } = useWorkspaceCache();
@@ -93,6 +94,10 @@ export default function WorkspacePage() {
         const { applyFilter } = await import("@/utils/imageFilters");
         const { blob: filteredBlob } = await applyFilter(correctedCanvas, "grayscaleWhiteEnhance");
 
+        // Auto-detectar orientación basada en las dimensiones del canvas recortado
+        const detectedOrientation: "portrait" | "landscape" =
+          correctedCanvas.width > correctedCanvas.height ? "landscape" : "portrait";
+
         // Subir imagen filtrada a /api/upload
         const formData = new FormData();
         formData.append("file", filteredBlob, cropModalFileName);
@@ -123,6 +128,7 @@ export default function WorkspacePage() {
           id: uuidv4(),
           imageS3Key: uploadData.s3Key,
           imageUrl: dataUrl,
+          orientation: detectedOrientation,
           zones: [],
           record: {},
           ocrProcessed: false,
@@ -150,9 +156,11 @@ export default function WorkspacePage() {
         // Crear canvas desde el blob original y aplicar filtro
         const img = new Image();
         const tempUrl = URL.createObjectURL(cropModalBlob);
-        const filteredBlob = await new Promise<Blob>((resolve, reject) => {
+        const { blob: filteredBlob, detectedOrientation } = await new Promise<{ blob: Blob; detectedOrientation: "portrait" | "landscape" }>((resolve, reject) => {
           img.onload = async () => {
             URL.revokeObjectURL(tempUrl);
+            const orientation: "portrait" | "landscape" =
+              img.naturalWidth > img.naturalHeight ? "landscape" : "portrait";
             const canvas = document.createElement("canvas");
             canvas.width = img.naturalWidth;
             canvas.height = img.naturalHeight;
@@ -162,7 +170,7 @@ export default function WorkspacePage() {
             try {
               const { applyFilter } = await import("@/utils/imageFilters");
               const { blob } = await applyFilter(canvas, "grayscaleWhiteEnhance");
-              resolve(blob);
+              resolve({ blob, detectedOrientation: orientation });
             } catch (err) { reject(err); }
           };
           img.onerror = () => { URL.revokeObjectURL(tempUrl); reject(new Error("Image load failed")); };
@@ -193,6 +201,7 @@ export default function WorkspacePage() {
           id: uuidv4(),
           imageS3Key: uploadData.s3Key,
           imageUrl: dataUrl,
+          orientation: detectedOrientation,
           zones: [],
           record: {},
           ocrProcessed: false,
@@ -580,6 +589,7 @@ export default function WorkspacePage() {
               <ZoneEditor
                 imageUrl={currentPageImageUrl}
                 zones={currentPage.zones}
+                orientation={currentPage.orientation ?? "portrait"}
                 availableVariables={availableVariables}
                 onZoneCreated={(zone: WorkspaceZone) => addZone(currentPage.id, zone)}
                 onZoneUpdated={(zoneId: string, updates: Partial<WorkspaceZone>) => {
@@ -594,6 +604,7 @@ export default function WorkspacePage() {
                 }}
                 onZoneDeleted={(zoneId: string) => removeZone(currentPage.id, zoneId)}
                 onPropagateZones={(toAll: boolean) => propagateZones(currentPage.id, toAll)}
+                onToggleOrientation={() => togglePageOrientation(currentPage.id)}
               />
             ) : (
               <div className="h-full flex items-center justify-center">

@@ -7,6 +7,7 @@ export interface CanvasOverlayProps {
   imageUrl: string;
   areas: AreaOfInterest[];
   selectedAreaId: string | null;
+  orientation?: 'portrait' | 'landscape';
   onAreaCreated: (area: Omit<AreaOfInterest, "id" | "variableName">) => void;
   onAreaUpdated: (id: string, updates: Partial<AreaOfInterest>) => void;
   onAreaDeleted: (id: string) => void;
@@ -32,6 +33,7 @@ export default function CanvasOverlay({
   imageUrl,
   areas,
   selectedAreaId,
+  orientation = 'portrait',
   onAreaCreated,
   onAreaUpdated,
   onAreaDeleted,
@@ -160,22 +162,35 @@ export default function CanvasOverlay({
     if (!img || !container) return;
 
     const containerWidth = container.clientWidth;
-    // Limitar altura al 80% del viewport para imágenes panorámicas
-    const maxHeight = window.innerHeight * 0.75;
-    const aspectRatio = img.naturalHeight / img.naturalWidth;
+
+    // Determinar las dimensiones "efectivas" según la orientación deseada.
+    // Si la orientación natural de la imagen coincide con la deseada, usar tal cual.
+    // Si no coincide, intercambiamos W y H (porque la rotación CSS las invierte).
+    const naturalIsLandscape = img.naturalWidth > img.naturalHeight;
+    const desiredIsLandscape = orientation === 'landscape';
+    const needsSwap = naturalIsLandscape !== desiredIsLandscape;
+
+    const effectiveW = needsSwap ? img.naturalHeight : img.naturalWidth;
+    const effectiveH = needsSwap ? img.naturalWidth : img.naturalHeight;
+    const aspectRatio = effectiveH / effectiveW;
 
     let displayWidth = containerWidth;
     let displayHeight = containerWidth * aspectRatio;
 
-    // Si la imagen es landscape y excede la altura máxima, ajustar por altura
-    if (displayHeight > maxHeight) {
-      displayHeight = maxHeight;
-      displayWidth = displayHeight / aspectRatio;
+    // Solo limitar altura para imágenes landscape (panorámicas) que podrían
+    // desbordar la vista. Para portrait (A4), dejar que use todo el ancho
+    // disponible y que el contenedor padre haga scroll si es necesario.
+    if (orientation === 'landscape') {
+      const maxHeight = window.innerHeight * 0.65;
+      if (displayHeight > maxHeight) {
+        displayHeight = maxHeight;
+        displayWidth = displayHeight / aspectRatio;
+      }
     }
 
     setCanvasSize({ width: displayWidth, height: displayHeight });
     setImageLoaded(true);
-  }, []);
+  }, [orientation]);
 
   // Resize observer for responsive canvas
   useEffect(() => {
@@ -467,6 +482,22 @@ export default function CanvasOverlay({
     return "crosshair";
   };
 
+  // Recalculate canvas size when orientation changes
+  useEffect(() => {
+    if (imageRef.current && imageRef.current.naturalWidth > 0) {
+      handleImageLoad();
+    }
+  }, [orientation, handleImageLoad]);
+
+  // Determine if image needs CSS rotation to match desired orientation
+  const needsRotation = (() => {
+    const img = imageRef.current;
+    if (!img || img.naturalWidth === 0) return false;
+    const naturalIsLandscape = img.naturalWidth > img.naturalHeight;
+    const desiredIsLandscape = orientation === 'landscape';
+    return naturalIsLandscape !== desiredIsLandscape;
+  })();
+
   return (
     <div
       ref={containerRef}
@@ -474,20 +505,36 @@ export default function CanvasOverlay({
       role="application"
       aria-label="Editor de áreas del documento"
     >
-      {/* Document image - using img intentionally for canvas manipulation, next/image not suitable */}
+      {/* Document image - rotated via CSS when natural orientation doesn't match desired */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         ref={imageRef}
         src={imageUrl}
         alt="Documento para segmentación"
-        className="w-full h-auto block"
+        className="block"
         onLoad={handleImageLoad}
         draggable={false}
         style={{
           width: canvasSize.width > 0 ? `${canvasSize.width}px` : "100%",
           height: canvasSize.height > 0 ? `${canvasSize.height}px` : "auto",
+          ...(needsRotation
+            ? {
+                transform: 'rotate(90deg)',
+                transformOrigin: 'center center',
+                width: `${canvasSize.height}px`,
+                height: `${canvasSize.width}px`,
+                position: 'absolute' as const,
+                top: `${(canvasSize.height - canvasSize.width) / 2}px`,
+                left: `${(canvasSize.width - canvasSize.height) / 2}px`,
+              }
+            : {}),
         }}
       />
+
+      {/* Sized container to maintain layout when image is rotated */}
+      {needsRotation && canvasSize.width > 0 && (
+        <div style={{ width: `${canvasSize.width}px`, height: `${canvasSize.height}px` }} aria-hidden="true" />
+      )}
 
       {/* Canvas overlay */}
       {imageLoaded && (

@@ -11,6 +11,7 @@ import OcrProcessingPanel from "@/components/workspace/OcrProcessingPanel";
 import BatchResultsTable from "@/components/workspace/BatchResultsTable";
 import SessionToolbar from "@/components/workspace/SessionToolbar";
 import ZoneEditor from "@/components/workspace/ZoneEditor";
+import PerspectiveEditor from "@/components/digitization/PerspectiveEditor";
 import type { GeneratedFile, TemplateMetadata, WorkspaceZone } from "@/types";
 
 export default function WorkspacePage() {
@@ -18,6 +19,10 @@ export default function WorkspacePage() {
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [selectedWordTemplate, setSelectedWordTemplate] = useState<TemplateMetadata | null>(null);
   const [selectedXlsxTemplate, setSelectedXlsxTemplate] = useState<TemplateMetadata | null>(null);
+
+  // Estado para el modal de recorte de perspectiva
+  const [cropModalBlob, setCropModalBlob] = useState<Blob | null>(null);
+  const [cropModalFileName, setCropModalFileName] = useState<string>("");
 
   const workspaceActive = useAppStore((s) => s.workspaceActive);
   const activeTemplate = useAppStore((s) => s.activeTemplate);
@@ -54,40 +59,37 @@ export default function WorkspacePage() {
     addPageInputRef.current?.click();
   }, []);
 
+  // Cuando el usuario selecciona un archivo, abrir el modal de recorte
   const handleAddPageFile = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
+    (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
+      setCropModalBlob(file);
+      setCropModalFileName(file.name);
+      // Reset input para permitir seleccionar el mismo archivo de nuevo
+      if (addPageInputRef.current) {
+        addPageInputRef.current.value = "";
+      }
+    },
+    []
+  );
 
+  // Cuando el usuario acepta el recorte del PerspectiveEditor
+  const handleCropAccept = useCallback(
+    async (correctedBlob: Blob, correctedCanvas: HTMLCanvasElement) => {
+      setCropModalBlob(null);
       setAddingPage(true);
-      try {
-        // Create canvas from file and apply grayscaleWhiteEnhance filter
-        const img = new Image();
-        const tempUrl = URL.createObjectURL(file);
-        const filteredBlob = await new Promise<Blob>((resolve, reject) => {
-          img.onload = async () => {
-            URL.revokeObjectURL(tempUrl);
-            const canvas = document.createElement("canvas");
-            canvas.width = img.naturalWidth;
-            canvas.height = img.naturalHeight;
-            const ctx = canvas.getContext("2d");
-            if (!ctx) { reject(new Error("No canvas context")); return; }
-            ctx.drawImage(img, 0, 0);
-            try {
-              const { applyFilter } = await import("@/utils/imageFilters");
-              const { blob } = await applyFilter(canvas, "grayscaleWhiteEnhance");
-              resolve(blob);
-            } catch (err) { reject(err); }
-          };
-          img.onerror = () => { URL.revokeObjectURL(tempUrl); reject(new Error("Image load failed")); };
-          img.src = tempUrl;
-        });
 
-        // Upload filtered image to /api/upload
+      try {
+        // Aplicar filtro grayscaleWhiteEnhance a la imagen recortada
+        const { applyFilter } = await import("@/utils/imageFilters");
+        const { blob: filteredBlob } = await applyFilter(correctedCanvas, "grayscaleWhiteEnhance");
+
+        // Subir imagen filtrada a /api/upload
         const formData = new FormData();
-        formData.append("file", filteredBlob, file.name);
+        formData.append("file", filteredBlob, cropModalFileName);
         formData.append("type", "source");
-        formData.append("fileName", file.name);
+        formData.append("fileName", cropModalFileName);
 
         const uploadResponse = await fetch("/api/upload", {
           method: "POST",
@@ -101,7 +103,7 @@ export default function WorkspacePage() {
 
         const uploadData = await uploadResponse.json();
 
-        // Convert filtered blob to data URL
+        // Convertir a data URL para mostrar en el workspace
         const dataUrl = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onloadend = () => resolve(reader.result as string);
@@ -124,14 +126,85 @@ export default function WorkspacePage() {
         addToast({ type: "error", message: "Error al agregar la página" });
       } finally {
         setAddingPage(false);
-        // Reset input so the same file can be selected again
-        if (addPageInputRef.current) {
-          addPageInputRef.current.value = "";
-        }
       }
     },
-    [addPage, addToast]
+    [addPage, addToast, cropModalFileName]
   );
+
+  // Cuando el usuario cancela o salta el recorte — agregar imagen sin recortar
+  const handleCropSkip = useCallback(
+    async () => {
+      if (!cropModalBlob) return;
+      setCropModalBlob(null);
+      setAddingPage(true);
+
+      try {
+        // Crear canvas desde el blob original y aplicar filtro
+        const img = new Image();
+        const tempUrl = URL.createObjectURL(cropModalBlob);
+        const filteredBlob = await new Promise<Blob>((resolve, reject) => {
+          img.onload = async () => {
+            URL.revokeObjectURL(tempUrl);
+            const canvas = document.createElement("canvas");
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) { reject(new Error("No canvas context")); return; }
+            ctx.drawImage(img, 0, 0);
+            try {
+              const { applyFilter } = await import("@/utils/imageFilters");
+              const { blob } = await applyFilter(canvas, "grayscaleWhiteEnhance");
+              resolve(blob);
+            } catch (err) { reject(err); }
+          };
+          img.onerror = () => { URL.revokeObjectURL(tempUrl); reject(new Error("Image load failed")); };
+          img.src = tempUrl;
+        });
+
+        // Subir
+        const formData = new FormData();
+        formData.append("file", filteredBlob, cropModalFileName);
+        formData.append("type", "source");
+        formData.append("fileName", cropModalFileName);
+
+        const uploadResponse = await fetch("/api/upload", { method: "POST", body: formData });
+        if (!uploadResponse.ok) {
+          addToast({ type: "error", message: "Error al subir la imagen" });
+          return;
+        }
+        const uploadData = await uploadResponse.json();
+
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error("Error al leer archivo"));
+          reader.readAsDataURL(filteredBlob);
+        });
+
+        addPage({
+          id: uuidv4(),
+          imageS3Key: uploadData.s3Key,
+          imageUrl: dataUrl,
+          zones: [],
+          record: {},
+          ocrProcessed: false,
+          status: "pending",
+        });
+
+        addToast({ type: "success", message: "Página agregada sin recorte" });
+      } catch {
+        addToast({ type: "error", message: "Error al agregar la página" });
+      } finally {
+        setAddingPage(false);
+      }
+    },
+    [cropModalBlob, cropModalFileName, addPage, addToast]
+  );
+
+  // Cancelar el modal sin agregar nada
+  const handleCropReject = useCallback(() => {
+    setCropModalBlob(null);
+  }, []);
 
   // Sync auth on mount (middleware handles real auth)
   useEffect(() => {
@@ -645,6 +718,35 @@ export default function WorkspacePage() {
           </div>
         </aside>
       </div>
+
+      {/* Modal de recorte de perspectiva */}
+      {cropModalBlob && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-[#1a1025] border border-purple-500/30 rounded-xl w-full max-w-4xl max-h-[90vh] overflow-auto p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-semibold text-[#f5f5f5]">
+                Seleccionar área del documento
+              </h3>
+              <button
+                type="button"
+                onClick={handleCropReject}
+                className="text-[#a1a1aa] hover:text-[#f5f5f5] transition-colors"
+                aria-label="Cerrar"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <PerspectiveEditor
+              imageBlob={cropModalBlob}
+              onAccept={handleCropAccept}
+              onReject={handleCropReject}
+              onSkip={handleCropSkip}
+            />
+          </div>
+        </div>
+      )}
     </main>
   );
 }

@@ -34,13 +34,19 @@ class S3StorageService implements StorageService {
 
   constructor() {
     this.bucketName = process.env.S3_BUCKET_NAME || process.env.MY_S3_BUCKET_NAME || '';
-    this.client = new S3Client({
-      region: process.env.AWS_REGION || process.env.MY_AWS_REGION || 'us-east-1',
-      credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || process.env.MY_AWS_ACCESS_KEY_ID || '',
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || process.env.MY_AWS_SECRET_ACCESS_KEY || '',
-      },
-    });
+
+    const region = process.env.AWS_REGION || process.env.MY_AWS_REGION || 'us-east-1';
+    const accessKeyId = process.env.AWS_ACCESS_KEY_ID || process.env.MY_AWS_ACCESS_KEY_ID || '';
+    const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY || process.env.MY_AWS_SECRET_ACCESS_KEY || '';
+
+    // Si hay credenciales explícitas (desarrollo local), usarlas.
+    // Si no, el SDK usa automáticamente el IAM Role del entorno (Lambda/Amplify).
+    const clientConfig: Record<string, unknown> = { region };
+    if (accessKeyId && secretAccessKey) {
+      clientConfig.credentials = { accessKeyId, secretAccessKey };
+    }
+
+    this.client = new S3Client(clientConfig as Record<string, unknown>);
   }
 
   async putObject(key: string, body: Buffer, contentType: string): Promise<void> {

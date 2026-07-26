@@ -267,13 +267,26 @@ export default function PerspectiveEditor({
 
     try {
       const sourceCanvas = canvasRef.current;
-      // Use the longer side as the output dimension for better quality
-      const maxDim = Math.max(sourceCanvas.width, sourceCanvas.height);
-      const outputWidth = Math.min(maxDim, 2480); // A4 at 300dpi width
-      const outputHeight = Math.min(
-        Math.round(outputWidth * 1.414),
-        maxDim * 1.414
-      ); // A4 ratio
+
+      // Calcular dimensiones de salida basándose en los corners seleccionados
+      // (no forzar ratio A4 — respetar la proporción del área seleccionada)
+      const [tl, tr, br, bl] = corners;
+
+      // Ancho = promedio de los lados superior e inferior
+      const topWidth = Math.sqrt((tr.x - tl.x) ** 2 + (tr.y - tl.y) ** 2);
+      const bottomWidth = Math.sqrt((br.x - bl.x) ** 2 + (br.y - bl.y) ** 2);
+      const avgWidth = (topWidth + bottomWidth) / 2;
+
+      // Alto = promedio de los lados izquierdo y derecho
+      const leftHeight = Math.sqrt((bl.x - tl.x) ** 2 + (bl.y - tl.y) ** 2);
+      const rightHeight = Math.sqrt((br.x - tr.x) ** 2 + (br.y - tr.y) ** 2);
+      const avgHeight = (leftHeight + rightHeight) / 2;
+
+      // Escalar para mantener buena resolución (máximo 2480px en el lado más largo)
+      const maxDim = 2480;
+      const scale = Math.min(maxDim / Math.max(avgWidth, avgHeight), 1);
+      const outputWidth = Math.round(avgWidth * scale) || Math.round(avgWidth);
+      const outputHeight = Math.round(avgHeight * scale) || Math.round(avgHeight);
 
       const result = applyPerspectiveTransform(
         sourceCanvas,

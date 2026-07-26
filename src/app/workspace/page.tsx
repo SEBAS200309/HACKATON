@@ -9,6 +9,7 @@ import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import BatchGeneratePanel from "@/components/workspace/BatchGeneratePanel";
 import OcrProcessingPanel from "@/components/workspace/OcrProcessingPanel";
 import BatchResultsTable from "@/components/workspace/BatchResultsTable";
+import ResultsEditorModal from "@/components/workspace/ResultsEditorModal";
 import SessionToolbar from "@/components/workspace/SessionToolbar";
 import ZoneEditor from "@/components/workspace/ZoneEditor";
 import PerspectiveEditor from "@/components/digitization/PerspectiveEditor";
@@ -23,6 +24,12 @@ export default function WorkspacePage() {
   // Estado para el modal de recorte de perspectiva
   const [cropModalBlob, setCropModalBlob] = useState<Blob | null>(null);
   const [cropModalFileName, setCropModalFileName] = useState<string>("");
+
+  // Estado para el modal de edición de variable
+  const [editingVariable, setEditingVariable] = useState<string | null>(null);
+
+  // Estado para el modal de edición de resultados
+  const [showResultsEditor, setShowResultsEditor] = useState(false);
 
   const workspaceActive = useAppStore((s) => s.workspaceActive);
   const activeTemplate = useAppStore((s) => s.activeTemplate);
@@ -46,6 +53,7 @@ export default function WorkspacePage() {
   const propagateZones = useAppStore((s) => s.propagateZones);
   const addPage = useAppStore((s) => s.addPage);
   const removePage = useAppStore((s) => s.removePage);
+  const updateVariableSettings = useAppStore((s) => s.updateVariableSettings);
 
   // Integración de caché de imágenes y OCR para el workspace
   const { loadPageImage } = useWorkspaceCache();
@@ -311,7 +319,7 @@ export default function WorkspacePage() {
   }, [workspaceActive, pages, loadPageImage]);
 
   const handleInitWorkspace = () => {
-    if (!selectedWordTemplate) return;
+    if (!selectedWordTemplate && !selectedXlsxTemplate) return;
     initWorkspace(selectedWordTemplate, selectedXlsxTemplate);
   };
 
@@ -340,7 +348,7 @@ export default function WorkspacePage() {
               Seleccionar plantilla para iniciar
             </h2>
             <p className="text-sm text-[#a1a1aa] mb-6">
-              Seleccione una plantilla Word (requerida) y opcionalmente una plantilla Excel para comenzar el procesamiento por lotes.
+              Seleccione al menos una plantilla (Word, Excel, o ambas) para comenzar el procesamiento.
             </p>
 
             {loadingTemplates ? (
@@ -352,7 +360,7 @@ export default function WorkspacePage() {
                 {/* Word template selection */}
                 <div>
                   <label className="block text-sm font-medium text-[#f5f5f5] mb-2">
-                    Plantilla Word <span className="text-red-400">*</span>
+                    Plantilla Word <span className="text-[#a1a1aa]">(opcional)</span>
                   </label>
                   {wordTemplates.length === 0 ? (
                     <p className="text-sm text-[#a1a1aa]">
@@ -426,7 +434,7 @@ export default function WorkspacePage() {
                   <Button
                     variant="primary"
                     size="md"
-                    disabled={!selectedWordTemplate}
+                    disabled={!selectedWordTemplate && !selectedXlsxTemplate}
                     onClick={handleInitWorkspace}
                   >
                     Iniciar espacio de trabajo
@@ -622,7 +630,6 @@ export default function WorkspacePage() {
               <h2 className="text-xs font-semibold text-[#a1a1aa] uppercase tracking-wide mb-2">
                 Variables ({availableVariables.length})
               </h2>
-              {/* ZoneVariableAssigner component will be integrated here */}
               {availableVariables.length === 0 ? (
                 <p className="text-xs text-[#a1a1aa]">
                   No hay variables disponibles.
@@ -634,14 +641,35 @@ export default function WorkspacePage() {
                       key={variable.name}
                       className="flex items-center justify-between rounded px-2 py-1.5 text-xs bg-[#0f0a1a] border border-purple-500/10"
                     >
-                      <span className="text-[#f5f5f5]">{variable.name}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                        variable.assigned
-                          ? "bg-green-500/20 text-green-400"
-                          : "bg-[#1a1025] text-[#a1a1aa]"
-                      }`}>
-                        {variable.assigned ? "Asignada" : "Sin asignar"}
-                      </span>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-[#f5f5f5] truncate">{variable.name}</span>
+                        {!variable.required && (
+                          <span className="text-[9px] px-1 py-0.5 rounded bg-yellow-500/10 text-yellow-400 shrink-0">Opc</span>
+                        )}
+                        {variable.broadcastToAll && (
+                          <span className="text-[9px] px-1 py-0.5 rounded bg-blue-500/10 text-blue-400 shrink-0">Todos</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                          variable.assigned
+                            ? "bg-green-500/20 text-green-400"
+                            : "bg-[#1a1025] text-[#a1a1aa]"
+                        }`}>
+                          {variable.assigned ? "✓" : "—"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setEditingVariable(variable.name)}
+                          className="p-0.5 text-[#a1a1aa] hover:text-purple-400 transition-colors"
+                          aria-label={`Configurar variable ${variable.name}`}
+                          title="Configurar variable"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -662,6 +690,22 @@ export default function WorkspacePage() {
               {/* Batch Results Table — show when pages have OCR results */}
               {pages.some((p) => p.ocrProcessed) && (
                 <div className="mb-3">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] text-[#a1a1aa]">
+                      {pages.filter((p) => p.ocrProcessed).length} página(s) procesada(s)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowResultsEditor(true)}
+                      className="flex items-center gap-1 px-2 py-1 text-[10px] rounded border border-purple-500/30 text-purple-400 hover:bg-purple-500/10 transition-colors"
+                      title="Editar resultados"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      </svg>
+                      Editar
+                    </button>
+                  </div>
                   <BatchResultsTable
                     pages={pages.filter((p) => p.ocrProcessed)}
                     variables={availableVariables.filter((v) => v.assigned)}
@@ -675,10 +719,10 @@ export default function WorkspacePage() {
                 <div className="mb-3">
                   <BatchGeneratePanel
                     pages={pages}
-                    templateId={activeTemplate?.id ?? ""}
+                    templateId={activeTemplate?.id ?? activeXlsxTemplate?.id ?? ""}
                     xlsxTemplateId={activeXlsxTemplate?.id}
                     assignedVariables={availableVariables
-                      .filter((v) => v.assigned)
+                      .filter((v) => v.assigned && v.required)
                       .map((v) => v.name)}
                     onBatchComplete={(files: GeneratedFile[]) => {
                       useAppStore.setState({ generatedFiles: files });
@@ -718,6 +762,105 @@ export default function WorkspacePage() {
           </div>
         </aside>
       </div>
+
+      {/* Modal de edición de resultados OCR */}
+      {showResultsEditor && (
+        <ResultsEditorModal
+          pages={pages.filter((p) => p.ocrProcessed)}
+          variables={availableVariables.filter((v) => v.assigned)}
+          onSave={(updatedPages) => {
+            // Aplicar cambios al store
+            useAppStore.setState((state) => ({
+              pages: state.pages.map((p) => {
+                const updated = updatedPages.find((u) => u.id === p.id);
+                return updated ?? p;
+              }),
+            }));
+          }}
+          onClose={() => setShowResultsEditor(false)}
+        />
+      )}
+
+      {/* Modal de configuración de variable */}
+      {editingVariable && (() => {
+        const variable = availableVariables.find((v) => v.name === editingVariable);
+        if (!variable) return null;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+            <div className="bg-[#1a1025] border border-purple-500/30 rounded-xl w-full max-w-sm p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-[#f5f5f5]">
+                  Configurar: {variable.name}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setEditingVariable(null)}
+                  className="text-[#a1a1aa] hover:text-[#f5f5f5] transition-colors"
+                  aria-label="Cerrar"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Required toggle */}
+                <label className="flex items-center justify-between cursor-pointer">
+                  <div>
+                    <span className="text-sm text-[#f5f5f5]">Requerido</span>
+                    <p className="text-[10px] text-[#a1a1aa]">Si está desactivado, no será obligatorio para generar documentos</p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={variable.required}
+                    onClick={() => updateVariableSettings(variable.name, { required: !variable.required })}
+                    className={`relative w-9 h-5 rounded-full transition-colors ${
+                      variable.required ? "bg-purple-500" : "bg-gray-600"
+                    }`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                      variable.required ? "translate-x-4" : "translate-x-0"
+                    }`} />
+                  </button>
+                </label>
+
+                {/* Broadcast to all toggle */}
+                <label className="flex items-center justify-between cursor-pointer">
+                  <div>
+                    <span className="text-sm text-[#f5f5f5]">Aplicar a todos los registros</span>
+                    <p className="text-[10px] text-[#a1a1aa]">El valor extraído se copia a todas las filas (para datos compartidos como Equipo o Juez)</p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={variable.broadcastToAll}
+                    onClick={() => updateVariableSettings(variable.name, { broadcastToAll: !variable.broadcastToAll })}
+                    className={`relative w-9 h-5 rounded-full transition-colors ${
+                      variable.broadcastToAll ? "bg-purple-500" : "bg-gray-600"
+                    }`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                      variable.broadcastToAll ? "translate-x-4" : "translate-x-0"
+                    }`} />
+                  </button>
+                </label>
+              </div>
+
+              <div className="mt-5 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setEditingVariable(null)}
+                  className="px-4 py-1.5 text-xs font-medium rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-colors"
+                >
+                  Listo
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Modal de recorte de perspectiva */}
       {cropModalBlob && (

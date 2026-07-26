@@ -32,6 +32,10 @@ export interface Variable {
   name: string;
   source: 'word' | 'xlsx' | 'both';
   assigned: boolean;
+  /** Si es false, no es obligatorio para generar documentos */
+  required: boolean;
+  /** Si es true, el valor extraído se copia a todos los registros de la página (multi-record) */
+  broadcastToAll: boolean;
 }
 
 export interface SegmentationConfig {
@@ -91,6 +95,8 @@ export interface WorkspacePage {
   imageUrl: string;
   zones: WorkspaceZone[];
   record: Record<string, string>;
+  /** Múltiples registros extraídos de una sola página (para plantillas XLSX con columnas) */
+  records?: Record<string, string>[];
   ocrProcessed: boolean;
   status: 'pending' | 'processing' | 'completed' | 'error';
 }

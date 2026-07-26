@@ -47,7 +47,7 @@ interface AppState {
   generatedFiles: GeneratedFile[];
 
   // Workspace actions
-  initWorkspace: (template: TemplateMetadata, xlsx?: TemplateMetadata | null) => void;
+  initWorkspace: (template: TemplateMetadata | null, xlsx?: TemplateMetadata | null) => void;
   addPage: (page: Omit<WorkspacePage, 'pageNumber'>) => void;
   removePage: (pageId: string) => void;
   reorderPages: (fromIndex: number, toIndex: number) => void;
@@ -55,6 +55,7 @@ interface AppState {
   addZone: (pageId: string, zone: WorkspaceZone) => void;
   removeZone: (pageId: string, zoneId: string) => void;
   propagateZones: (fromPageId: string, toAll: boolean) => void;
+  updateVariableSettings: (variableName: string, settings: { required?: boolean; broadcastToAll?: boolean }) => void;
   updateRecord: (pageId: string, variableName: string, value: string) => void;
   setPageOcrResults: (pageId: string, results: OcrResult[]) => void;
   retakePage: (pageId: string, newImageS3Key: string, newImageUrl: string) => void;
@@ -144,21 +145,23 @@ export function stopAreasAutoSave(): void {
 // ─── Workspace helpers ────────────────────────────────────────────────────────
 
 function extractVariablesFromTemplates(
-  primaryTemplate: TemplateMetadata,
+  primaryTemplate: TemplateMetadata | null,
   secondaryTemplate: TemplateMetadata | null | undefined
 ): Variable[] {
   const variableMap = new Map<string, Variable>();
 
-  // Determine source based on actual template type
-  const primarySource: 'word' | 'xlsx' = primaryTemplate.type === 'xlsx' ? 'xlsx' : 'word';
-
   // Extract from primary template placeholders
-  for (const placeholder of primaryTemplate.placeholders) {
-    variableMap.set(placeholder, {
-      name: placeholder,
-      source: primarySource,
-      assigned: false,
-    });
+  if (primaryTemplate) {
+    const primarySource: 'word' | 'xlsx' = primaryTemplate.type === 'xlsx' ? 'xlsx' : 'word';
+    for (const placeholder of primaryTemplate.placeholders) {
+      variableMap.set(placeholder, {
+        name: placeholder,
+        source: primarySource,
+        assigned: false,
+        required: true,
+        broadcastToAll: false,
+      });
+    }
   }
 
   // Extract from secondary template placeholders
@@ -173,6 +176,8 @@ function extractVariablesFromTemplates(
           name: placeholder,
           source: secondarySource,
           assigned: false,
+          required: true,
+          broadcastToAll: false,
         });
       }
     }
@@ -330,7 +335,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
     const variables = extractVariablesFromTemplates(template, xlsx);
     set({
       workspaceActive: true,
-      activeTemplate: template,
+      activeTemplate: template ?? null,
       activeXlsxTemplate: xlsx ?? null,
       availableVariables: variables,
       pages: [],
@@ -456,27 +461,111 @@ export const useAppStore = create<AppState>()((set, get) => ({
     set({ pages: newPages, availableVariables: updatedVariables });
   },
 
+  updateVariableSettings: (variableName, settings) => {
+    set((state) => {
+      const updatedVariables = state.availableVariables.map((v) =>
+        v.name === variableName ? { ...v, ...settings } : v
+      );
+
+      // Resetear OCR de todas las páginas para que se vuelva a procesar
+      const resetPages = state.pages.map((p) =>
+        p.ocrProcessed
+          ? { ...p, ocrProcessed: false, status: 'pending' as const, record: {}, records: undefined }
+          : p
+      );
+
+      return { availableVariables: updatedVariables, pages: resetPages };
+    });
+  },
+
   updateRecord: (pageId, variableName, value) => {
     set((state) => ({
-      pages: state.pages.map((p) =>
-        p.id === pageId
-          ? { ...p, record: { ...p.record, [variableName]: value } }
-          : p
-      ),
+      pages: state.pages.map((p) => {
+        if (p.id !== pageId) return p;
+
+        // Manejar actualización de multi-record (formato: __multi__${index}__${varName})
+        if (variableName.startsWith('__multi__')) {
+          const parts = variableName.split('__');
+          const recIdx = parseInt(parts[2], 10);
+          const actualVarName = parts[3];
+          if (!p.records || isNaN(recIdx)) return p;
+
+          const newRecords = [...p.records];
+          if (newRecords[recIdx]) {
+            newRecords[recIdx] = { ...newRecords[recIdx], [actualVarName]: value };
+          }
+          return { ...p, records: newRecords };
+        }
+
+        // Modo estándar
+        return { ...p, record: { ...p.record, [variableName]: value } };
+      }),
     }));
   },
 
   setPageOcrResults: (pageId, results) => {
-    set((state) => ({
-      pages: state.pages.map((p) => {
+    const state = get();
+    const isXlsxMode = state.activeXlsxTemplate !== null && state.activeTemplate === null;
+
+    set((s) => ({
+      pages: s.pages.map((p) => {
         if (p.id !== pageId) return p;
+
+        // Modo estándar (Word o Word+XLSX): un registro por página
         const newRecord = { ...p.record };
         for (const result of results) {
           newRecord[result.variableName] = result.extractedText;
         }
+
+        // Modo XLSX-only con columnas: detectar múltiples líneas y crear registros
+        let multiRecords: Record<string, string>[] | undefined;
+        if (isXlsxMode) {
+          // Identificar variables broadcast (se copian a todos los registros)
+          const broadcastVars = s.availableVariables
+            .filter((v) => v.broadcastToAll)
+            .map((v) => v.name);
+
+          // Separar cada resultado por líneas (newline)
+          const splitResults: Record<string, string[]> = {};
+          const broadcastValues: Record<string, string> = {};
+          let maxLines = 0;
+
+          for (const result of results) {
+            if (broadcastVars.includes(result.variableName)) {
+              // Variables broadcast: usar el texto completo (sin split)
+              broadcastValues[result.variableName] = result.extractedText;
+            } else {
+              const lines = result.extractedText
+                .split(/\n/)
+                .map((l) => l.trim())
+                .filter((l) => l.length > 0);
+              splitResults[result.variableName] = lines;
+              if (lines.length > maxLines) maxLines = lines.length;
+            }
+          }
+
+          // Si alguna variable tiene más de 1 línea, crear múltiples registros
+          if (maxLines > 1) {
+            multiRecords = [];
+            for (let i = 0; i < maxLines; i++) {
+              const row: Record<string, string> = {};
+              // Agregar valores split (una línea por registro)
+              for (const varName of Object.keys(splitResults)) {
+                row[varName] = splitResults[varName][i] ?? '';
+              }
+              // Agregar valores broadcast (mismo valor en todos los registros)
+              for (const [varName, value] of Object.entries(broadcastValues)) {
+                row[varName] = value;
+              }
+              multiRecords.push(row);
+            }
+          }
+        }
+
         return {
           ...p,
           record: newRecord,
+          records: multiRecords,
           ocrProcessed: true,
           status: 'completed' as const,
         };

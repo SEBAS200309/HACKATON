@@ -26,15 +26,36 @@ export default function BatchGeneratePanel({
   const [errors, setErrors] = useState<Array<{ recordIndex: number; message: string }>>([]);
   const [showDownloads, setShowDownloads] = useState(false);
 
-  // Calculate complete records: pages where ALL assignedVariables have non-empty values
+  // Calculate complete records: expand multi-record pages for XLSX
   const completeRecords = useMemo(() => {
     if (assignedVariables.length === 0) return [];
 
-    return pages.filter((page) =>
-      assignedVariables.every(
-        (varName) => page.record[varName] && page.record[varName].trim() !== ""
-      )
-    );
+    const allRecords: Record<string, string>[] = [];
+
+    for (const page of pages) {
+      // Si la página tiene múltiples registros (modo XLSX columna), expandirlos
+      if (page.records && page.records.length > 0) {
+        for (const rec of page.records) {
+          // Solo incluir registros donde todos los required tienen valor
+          const allRequiredFilled = assignedVariables.every(
+            (varName) => rec[varName] && rec[varName].trim() !== ""
+          );
+          if (allRequiredFilled) {
+            allRecords.push(rec);
+          }
+        }
+      } else if (page.ocrProcessed) {
+        // Modo estándar: un registro por página
+        const allFilled = assignedVariables.every(
+          (varName) => page.record[varName] && page.record[varName].trim() !== ""
+        );
+        if (allFilled) {
+          allRecords.push(page.record);
+        }
+      }
+    }
+
+    return allRecords;
   }, [pages, assignedVariables]);
 
   const isDisabled = completeRecords.length === 0 || isGenerating;
@@ -69,7 +90,7 @@ export default function BatchGeneratePanel({
         body: JSON.stringify({
           templateId,
           xlsxTemplateId,
-          records: completeRecords.map((page) => page.record),
+          records: completeRecords,
         }),
       });
 

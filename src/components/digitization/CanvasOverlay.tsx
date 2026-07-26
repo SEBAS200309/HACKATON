@@ -160,9 +160,18 @@ export default function CanvasOverlay({
     if (!img || !container) return;
 
     const containerWidth = container.clientWidth;
+    // Limitar altura al 80% del viewport para imágenes panorámicas
+    const maxHeight = window.innerHeight * 0.75;
     const aspectRatio = img.naturalHeight / img.naturalWidth;
-    const displayWidth = containerWidth;
-    const displayHeight = containerWidth * aspectRatio;
+
+    let displayWidth = containerWidth;
+    let displayHeight = containerWidth * aspectRatio;
+
+    // Si la imagen es landscape y excede la altura máxima, ajustar por altura
+    if (displayHeight > maxHeight) {
+      displayHeight = maxHeight;
+      displayWidth = displayHeight / aspectRatio;
+    }
 
     setCanvasSize({ width: displayWidth, height: displayHeight });
     setImageLoaded(true);
@@ -461,7 +470,7 @@ export default function CanvasOverlay({
   return (
     <div
       ref={containerRef}
-      className="relative w-full select-none"
+      className="relative w-full select-none flex justify-center"
       role="application"
       aria-label="Editor de áreas del documento"
     >

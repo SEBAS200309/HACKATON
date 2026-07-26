@@ -139,6 +139,70 @@ export default function BatchResultsTable({
         {/* Body */}
         <tbody>
           {pages.map((page, index) => {
+            // Si la página tiene múltiples registros (modo columna XLSX)
+            if (page.records && page.records.length > 0) {
+              return page.records.map((rec, recIdx) => {
+                const complete = variables.every(
+                  (v) => (rec[v.name] ?? "").trim() !== ""
+                );
+                const rowKey = `${page.id}-rec-${recIdx}`;
+                const isEvenRow = (index + recIdx) % 2 === 0;
+
+                return (
+                  <tr
+                    key={rowKey}
+                    className={`
+                      border-b border-purple-500/10 last:border-b-0
+                      ${isEvenRow ? "bg-[#0f0a1a]" : "bg-[#0f0a1a]/60"}
+                      hover:bg-[#1a1025]/50 transition-colors duration-100
+                    `}
+                  >
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: statusDotColors[page.status] }}
+                          title={statusLabels[page.status]}
+                          aria-label={statusLabels[page.status]}
+                        />
+                        <span className="text-sm font-medium text-[#f5f5f5]">
+                          {page.pageNumber}.{recIdx + 1}
+                        </span>
+                      </div>
+                    </td>
+
+                    {variables.map((variable) => (
+                      <td key={`${rowKey}-${variable.name}`} className="px-1 py-0.5">
+                        <EditableCell
+                          pageId={page.id}
+                          variableName={`${variable.name}__${recIdx}`}
+                          value={rec[variable.name] ?? ""}
+                          onUpdateRecord={(_, __, newValue) => {
+                            // Actualizar el registro específico dentro del array records
+                            onUpdateRecord(page.id, `__multi__${recIdx}__${variable.name}`, newValue);
+                          }}
+                        />
+                      </td>
+                    ))}
+
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      {complete ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-400">
+                          <span aria-hidden="true">✓</span>
+                          Completo
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-500/10 text-yellow-400">
+                          Incompleto
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              });
+            }
+
+            // Modo estándar: un registro por página
             const complete = isRowComplete(page, variables);
             const isEvenRow = index % 2 === 0;
 
@@ -151,7 +215,6 @@ export default function BatchResultsTable({
                   hover:bg-[#1a1025]/50 transition-colors duration-100
                 `}
               >
-                {/* Page number + status dot */}
                 <td className="px-3 py-2 whitespace-nowrap">
                   <div className="flex items-center gap-2">
                     <span
@@ -166,7 +229,6 @@ export default function BatchResultsTable({
                   </div>
                 </td>
 
-                {/* Variable cells - editable */}
                 {variables.map((variable) => (
                   <td key={`${page.id}-${variable.name}`} className="px-1 py-0.5">
                     <EditableCell
@@ -178,7 +240,6 @@ export default function BatchResultsTable({
                   </td>
                 ))}
 
-                {/* Completeness indicator */}
                 <td className="px-3 py-2 whitespace-nowrap">
                   {complete ? (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-400">

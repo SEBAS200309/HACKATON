@@ -284,8 +284,8 @@ El enfoque es bottom-up: primero utilidades de bajo nivel, luego servicios, lueg
     - Restaurar al montar /workspace si hay sesión guardada
     - _Requirements: 5.4, 5.5_
 
-- [ ] 13. Configuración de despliegue AWS Amplify
-  - [ ] 13.1 Documentar proceso de despliegue step-by-step
+- [x] 13. Configuración de despliegue AWS Amplify
+  - [x] 13.1 Documentar proceso de despliegue step-by-step
     - Crear `docs/deployment-guide.md` con instrucciones completas
     - Incluir: conexión de repositorio, configuración de build, variables de entorno, dominio custom, verificación
     - Documentar configuración de CORS en S3 para dominio Amplify
@@ -293,7 +293,7 @@ El enfoque es bottom-up: primero utilidades de bajo nivel, luego servicios, lueg
     - Documentar que PaddleOCR descarga modelos (~20MB) del CDN en primer uso y los cachea
     - _Requirements: 11.2, 11.4, 11.5, 11.6, 11.8, 11.9_
 
-  - [ ] 13.2 Configurar compatibilidad de PaddleOCR (ONNX Runtime) con Lambda
+  - [x] 13.2 Configurar compatibilidad de PaddleOCR (ONNX Runtime) con Lambda
     - Asegurar que `onnxruntime-node` binarios nativos se incluyan en el deployment package
     - Configurar `serverComponentsExternalPackages` en next.config: ['ppu-paddle-ocr', 'sharp', 'onnxruntime-node', 'onnxruntime-common']
     - Verificar que los modelos ONNX se descarguen correctamente en el primer cold start de Lambda
@@ -301,7 +301,7 @@ El enfoque es bottom-up: primero utilidades de bajo nivel, luego servicios, lueg
     - Verificar tiempo de cold start con PaddleOCR (~5-10s primera invocación, <1s warm)
     - _Requirements: 11.3, 12.1, 12.3, 12.5_
 
-- [~] 14. Final checkpoint - Verificar integración completa
+- [x] 14. Final checkpoint - Verificar integración completa
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

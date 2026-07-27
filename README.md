@@ -270,7 +270,7 @@ El proyecto incluye **property-based testing** con fast-check para validar propi
 ## 👤 Autor
 
 <p align="center">
-  <img src="./docs/author.jpg" alt="Sebastian Cardona Aldana" width="150" style="border-radius: 50%;" />
+  <img src="./sin titulo.png" alt="Sebastian Cardona Aldana" width="150" style="border-radius: 50%;" />
 </p>
 
 <h3 align="center">Sebastián Cardona Aldana</h3>

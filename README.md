@@ -110,9 +110,26 @@ Este proyecto fue desarrollado **completamente con Kiro** siguiendo la metodolog
 
 **Resultado:** Código consistente, bien arquitecturado y mantenible desde el primer commit. Sin refactors masivos. Sin inconsistencias entre archivos.
 
+### 📖 Documentación Técnica de Diseño (Specs)
+
+Estos documentos fueron creados ANTES de codear y guiaron toda la implementación:
+
+| Spec | Requerimientos | Diseño Técnico | Tareas |
+|------|---------------|----------------|--------|
+| **v1 — MVP Document Digitization** | [requirements.md](./.kiro/specs/document-digitization/requirements.md) | [design.md](./.kiro/specs/document-digitization/design.md) | [tasks.md](./.kiro/specs/document-digitization/tasks.md) |
+| **v2 — Scanner Optimization** | [requirements.md](./.kiro/specs/v2-scanner-optimization/requirements.md) | [design.md](./.kiro/specs/v2-scanner-optimization/design.md) | [tasks.md](./.kiro/specs/v2-scanner-optimization/tasks.md) |
+
+> 💡 Los archivos `design.md` contienen la arquitectura detallada, diagramas de secuencia, contratos de API, tipos TypeScript y decisiones técnicas de cada feature.
+
 ---
 
 ## 🏗️ Arquitectura del Proyecto
+
+<p align="center">
+  <img src="./imagenes_readme/Diagrama de arquitectura.png" alt="Diagrama de Arquitectura DocuScan" width="800" />
+  <br/>
+  <em>Diagrama de arquitectura completo del sistema</em>
+</p>
 
 ```
 src/

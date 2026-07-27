@@ -187,6 +187,52 @@ src/
 
 ---
 
+## 📝 Cómo Configurar las Plantillas
+
+Para que la aplicación reconozca las variables a completar, las plantillas deben seguir estas convenciones:
+
+### Plantillas Word (.docx)
+
+Coloca los nombres de las variables entre dobles llaves `{{NombreVariable}}` en cualquier parte del documento. El sistema las detectará automáticamente al subir la plantilla.
+
+**Ejemplo:**
+
+```
+Nombre del jugador: {{NombreCompleto}}
+C.C: {{CC}}
+Teléfono: {{Telefono}}
+Dirección: {{Direccion}}
+Correo: {{Correo}}
+Cuenta bancaria No. {{CuentaBancaria}} Tipo de cuenta: {{TipoCuenta}} Banco: {{Banco}}
+```
+
+<p align="center">
+  <img src="./imagenes_readme/plantilla_word.png" alt="Ejemplo de plantilla Word con variables" width="600" />
+  <br/>
+  <em>Ejemplo real de una plantilla Word configurada con variables {{}} que el sistema detecta automáticamente</em>
+</p>
+
+### Plantillas Excel (.xlsx)
+
+La primera fila del archivo Excel debe contener los **encabezados de columna**. Cada encabezado se convierte automáticamente en una variable disponible. **NO uses llaves `{{}}`** en Excel, solo el nombre directo.
+
+**Ejemplo de primera fila:**
+
+| Dia | Mes | Año | NombreCompleto | CC | ValorEnLetras | ValorEnNumeros |
+|-----|-----|-----|----------------|------|---------------|----------------|
+|     |     |     |                |      |               |                |
+
+Cada vez que se procesa un documento, se agrega una nueva fila con los valores extraídos por OCR.
+
+### Documentos de ejemplo dentro del sistema
+
+La demo en producción ya tiene **plantillas Word y Excel precargadas** listas para probar. Al ingresar al sistema podrás:
+1. Ver las plantillas disponibles con sus variables detectadas
+2. Seleccionar una para iniciar el flujo de digitalización
+3. Probar el flujo completo sin necesidad de configurar nada
+
+---
+
 ## 🔄 Flujo de Trabajo
 
 ```
@@ -270,7 +316,7 @@ El proyecto incluye **property-based testing** con fast-check para validar propi
 ## 👤 Autor
 
 <p align="center">
-  <img src="./sin titulo.png" alt="Sebastian Cardona Aldana" width="150" style="border-radius: 50%;" />
+  <img src="./imagenes_readme/Sin título.png" alt="Sebastian Cardona Aldana" width="150" style="border-radius: 50%;" />
 </p>
 
 <h3 align="center">Sebastián Cardona Aldana</h3>

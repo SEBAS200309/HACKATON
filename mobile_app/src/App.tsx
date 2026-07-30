@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
 // ── Palette ──────────────────────────────────────────────────────────────────
 const P = {
@@ -139,7 +139,7 @@ function ToggleBtn({ defaultOn }: { defaultOn: boolean }) {
 // ── HOME SCREEN ──────────────────────────────────────────────────────────────
 function HomeScreen({ onNav }: { onNav: (t: Tab) => void }) {
   const hour = new Date().getHours()
-  const greet = hour < 12 ? '☀️  Buenos días' : hour < 18 ? '👋  Buenas tardes' : '🌙  Buenas noches'
+  const greet = hour < 12 ? 'Buenos días' : hour < 18 ? 'Buenas tardes' : 'Buenas noches'
 
   return (
     <div className="page-scroll">
@@ -266,8 +266,7 @@ function TemplatesScreen({ templates, setTemplates, onToast }: { templates: Temp
   return (
     <div className="page-scroll">
       <div style={{ padding: '12px 20px 100px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <h2 style={{ color: P.text, fontSize: 22, fontWeight: 900 }}>Mis Plantillas</h2>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 16 }}>
           <span style={{ color: P.faint, fontFamily: 'DM Mono', fontSize: 12 }}>{templates.length} plantillas</span>
         </div>
 
@@ -405,7 +404,6 @@ function ScanScreen({ onToast, onNav }: { onToast: (m: string) => void; onNav: (
 
         {/* Top nav */}
         <div style={{ marginBottom: 20 }}>
-          <h2 style={{ color: P.text, fontSize: 22, fontWeight: 900 }}>Escanear</h2>
           <p style={{ color: P.faint, fontSize: 12, marginTop: 2 }}>Posiciona el documento en el marco</p>
         </div>
 
@@ -524,7 +522,6 @@ function WorkspaceScreen({ templates, onToast }: { templates: TemplateItem[]; on
   return (
     <div className="page-scroll">
       <div style={{ padding: '12px 20px 100px' }}>
-        <h2 style={{ color: P.text, fontSize: 22, fontWeight: 900, marginBottom: 4 }}>Espacio de Trabajo</h2>
         <p style={{ color: P.faint, fontSize: 12, marginBottom: 16 }}>Flujo de digitalización completo</p>
 
         {/* Step indicator */}
@@ -826,7 +823,6 @@ function SettingsScreen({ onToast }: { onToast: (m: string) => void }) {
   return (
     <div className="page-scroll">
       <div style={{ padding: '12px 20px 100px' }}>
-        <h2 style={{ color: P.text, fontSize: 22, fontWeight: 900, marginBottom: 20 }}>Ajustes</h2>
 
         {/* Storage section */}
         <div className="card-solid" style={{ padding: '16px', marginBottom: 16 }}>
@@ -904,9 +900,9 @@ function SettingsScreen({ onToast }: { onToast: (m: string) => void }) {
 }
 
 // ── TAB BAR ──────────────────────────────────────────────────────────────────
-function TabBar({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
+function TabBar({ tab, setTab, visible }: { tab: Tab; setTab: (t: Tab) => void; visible: boolean }) {
   return (
-    <div className="tab-bar">
+    <div className={`tab-bar ${!visible ? 'hidden' : ''}`}>
       {/* Inicio */}
       <div className={`tab-item ${tab === 'home' ? 'active' : ''}`} onClick={() => setTab('home')}>
         <div className="tab-icon-wrap">
@@ -951,11 +947,21 @@ function TabBar({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
 }
 
 // ── APP ──────────────────────────────────────────────────────────────────────
+const TAB_TITLES: Record<Tab, string> = {
+  home: 'Inicio',
+  templates: 'Plantillas',
+  scan: 'Escanear',
+  workspace: 'Workspace',
+  settings: 'Ajustes',
+}
+
 export default function App() {
   const [tab, setTab] = useState<Tab>('home')
   const [templates, setTemplates] = useState<TemplateItem[]>(TEMPLATES)
   const [toast, setToast] = useState<string | null>(null)
   const [navCount, setNavCount] = useState(0)
+  const [tabBarVisible, setTabBarVisible] = useState(true)
+  const lastScrollTop = useRef(0)
   const showToast = useCallback((m: string) => setToast(m), [])
 
   const handleSetTab = useCallback((t: Tab) => {
@@ -963,26 +969,43 @@ export default function App() {
     setNavCount(c => c + 1)
   }, [])
 
+  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const st = e.currentTarget.scrollTop
+    if (st > lastScrollTop.current && st > 50) {
+      setTabBarVisible(false)
+    } else {
+      setTabBarVisible(true)
+    }
+    lastScrollTop.current = st
+  }, [])
+
   return (
-    <div className="phone-wrap">
-      <div className="phone-frame">
-        <div className="screen">
-          <StatusBar />
+    <div className="app-shell">
+      <div className="screen">
 
-          {/* Page content */}
-          <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-            {tab === 'home'      && <div key={`home-${navCount}`} className="anim-slide-up" style={{ height: '100%' }}><HomeScreen onNav={handleSetTab} /></div>}
-            {tab === 'templates' && <div key={`templates-${navCount}`} className="anim-slide-up" style={{ height: '100%' }}><TemplatesScreen templates={templates} setTemplates={setTemplates} onToast={showToast} /></div>}
-            {tab === 'scan'      && <ScanScreen onToast={showToast} onNav={handleSetTab} />}
-            {tab === 'workspace' && <div key={`workspace-${navCount}`} className="anim-slide-up" style={{ height: '100%' }}><WorkspaceScreen templates={templates} onToast={showToast} /></div>}
-            {tab === 'settings'  && <div key={`settings-${navCount}`} className="anim-slide-up" style={{ height: '100%' }}><SettingsScreen onToast={showToast} /></div>}
-
-            {/* Toast */}
-            {toast && <Toast msg={toast} onDone={() => setToast(null)} />}
+        {/* Page content */}
+        <div style={{ flex: 1, position: 'relative', overflow: 'auto', WebkitOverflowScrolling: 'touch' }} onScroll={handleScroll}>
+          {/* Global header bubble */}
+          <div className="header-bubble">
+            <h2>{TAB_TITLES[tab]}</h2>
           </div>
 
-          <TabBar tab={tab} setTab={handleSetTab} />
+          {tab === 'home'      && <div key={`home-${navCount}`} className="anim-slide-up" style={{ height: '100%' }}><HomeScreen onNav={handleSetTab} /></div>}
+          {tab === 'templates' && <div key={`templates-${navCount}`} className="anim-slide-up" style={{ height: '100%' }}><TemplatesScreen templates={templates} setTemplates={setTemplates} onToast={showToast} /></div>}
+          {tab === 'scan'      && <ScanScreen onToast={showToast} onNav={handleSetTab} />}
+          {tab === 'workspace' && <div key={`workspace-${navCount}`} className="anim-slide-up" style={{ height: '100%' }}><WorkspaceScreen templates={templates} onToast={showToast} /></div>}
+          {tab === 'settings'  && <div key={`settings-${navCount}`} className="anim-slide-up" style={{ height: '100%' }}><SettingsScreen onToast={showToast} /></div>}
+
+          {/* Toast */}
+          {toast && <Toast msg={toast} onDone={() => setToast(null)} />}
         </div>
+
+        <TabBar tab={tab} setTab={handleSetTab} visible={tabBarVisible} />
+
+        {/* Dot indicator when tab bar is hidden */}
+        {!tabBarVisible && (
+          <div className="tab-bar-dot" onClick={() => setTabBarVisible(true)} />
+        )}
       </div>
     </div>
   )

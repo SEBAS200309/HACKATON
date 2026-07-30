@@ -9,9 +9,30 @@ body {
   font-family: 'Outfit', sans-serif;
   background: #1a0a3a;
   color: #f0edff;
-  overflow: hidden;
-  user-select: none;
+  margin: 0;
+  padding: 0;
   -webkit-user-select: none;
+  touch-action: pan-y;
+}
+
+/* En desktop: permitir selección y scroll normal con mouse */
+@media (pointer: fine) {
+  body {
+    user-select: auto;
+  }
+  .page-scroll {
+    cursor: grab;
+  }
+  .page-scroll:active {
+    cursor: grabbing;
+  }
+}
+
+/* En mobile: bloquear selección para UX táctil */
+@media (pointer: coarse) {
+  body {
+    user-select: none;
+  }
 }
 
 .mono { font-family: 'DM Mono', monospace; }
@@ -58,7 +79,7 @@ body {
     radial-gradient(ellipse at 30% 10%, rgba(78,49,170,.4) 0%, transparent 50%),
     radial-gradient(ellipse at 70% 90%, rgba(47,88,205,.3) 0%, transparent 50%),
     #3A1078;
-  overflow: hidden;
+  position: relative;
 }
 
 /* ── Status bar ─────────────────────────────────────── */
@@ -72,23 +93,74 @@ body {
 
 /* ── Scrollable content ──────────────────────────────── */
 .page-scroll {
-  flex: 1; overflow-y: auto; overflow-x: hidden;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
 }
-.page-scroll::-webkit-scrollbar { display: none; }
 
-/* ── Bottom tab bar ──────────────────────────────────── */
-.tab-bar {
-  flex-shrink: 0;
-  height: 80px;
-  display: flex; align-items: flex-start; justify-content: space-around;
-  padding: 10px 8px 0;
-  background: rgba(28, 12, 60, 0.96);
-  border-top: 1px solid rgba(78,49,170,.3);
-  backdrop-filter: blur(20px);
-  position: relative;
+/* ── Global header bubble ────────────────────────────── */
+.header-bubble {
+  position: sticky;
+  top: 0;
   z-index: 50;
+  margin: 8px 16px 0;
+  padding: 14px 20px;
+  background: rgba(30, 12, 60, 0.98);
+  border: 1px solid rgba(78,49,170,.4);
+  border-radius: 20px;
+  backdrop-filter: blur(12px);
+  text-align: center;
+}
+
+.header-bubble h2 {
+  color: #f0edff;
+  font-size: 18px;
+  font-weight: 800;
+  margin: 0;
+  font-family: 'Outfit', sans-serif;
+}
+
+/* ── Floating tab bar bubble ─────────────────────────── */
+.tab-bar {
+  position: fixed;
+  bottom: 12px;
+  left: 16px;
+  right: 16px;
+  height: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 10px 8px;
+  background: rgba(28, 12, 60, 0.85);
+  border: 1px solid rgba(78,49,170,.4);
+  border-radius: 28px;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 8px 32px rgba(0,0,0,.4);
+  z-index: 60;
+  transition: transform 0.3s cubic-bezier(.22,.68,0,1), opacity 0.25s;
+}
+
+.tab-bar.hidden {
+  transform: translateY(120%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tab-bar-dot {
+  position: fixed;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(55,149,189,.6);
+  z-index: 59;
+  cursor: pointer;
+  transition: opacity 0.3s;
 }
 
 .tab-item {
@@ -361,4 +433,11 @@ body {
   content: ''; position: absolute; inset: 0; border-radius: inherit;
   border: 2px solid rgba(55,149,189,.5);
   animation: pulseRing 1.8s ease-out infinite;
+}
+
+/* ── App shell: fullscreen sin frame ────────────────── */
+.app-shell {
+  width: 100vw;
+  height: 100dvh;
+  background: #3A1078;
 }

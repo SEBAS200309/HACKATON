@@ -37,3 +37,7 @@ next-env.d.ts
 
 # tesseract trained data (large binary files — download separately)
 /trained-data/
+
+# mobile app (Figma frontend)
+mobile_app/node_modules/
+mobile_app/.figma/
